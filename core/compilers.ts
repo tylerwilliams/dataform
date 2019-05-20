@@ -3,7 +3,101 @@ import { OperationContext } from "./operation";
 import { TableContext } from "./table";
 import * as utils from "./utils";
 
+import * as moo from "moo";
+
+const lexer = moo.states({
+  sql: {
+    sql_start_config: { match: "config {", push: "config_block" },
+    sql_start_js: { match: "js {", push: "js_block" },
+    sql_single_line_comment: /\/\/.*?$/,
+    sql_multi_line_comment: /\/\*[\s\S]*?\*\//,
+    sql_single_quote_string: /'(?:\\['\\]|[^\n'\\])*'/,
+    sql_double_quote_string: /"(?:\\["\\]|[^\n"\\])*"/,
+    sql_start_new_block: { match: "${", push: "js_block" },
+    sql_everything_else: { match: /[\s\S]+?/, lineBreaks: true }
+  },
+  // this is currently intended to *only* support JSON, but could be changed for another config language.
+  config_block: {
+    config_block_double_quote_string: /"(?:\\["\\]|[^\n"\\])*"/,
+    config_block_start_new_block: { match: "{", push: "config_block" },
+    config_block_stop_block: { match: "}", pop: 1 },
+    config_block_everything_else: { match: /[\s\S]+?/, lineBreaks: true }
+  },
+  js_block: {
+    js_block_single_line_comment: /\/\/.*?$/,
+    js_block_multi_line_comment: /\/\*[\s\S]*?\*\//,
+    js_block_single_quote_string: /'(?:\\['\\]|[^\n'\\])*'/,
+    js_block_double_quote_string: /"(?:\\["\\]|[^\n"\\])*"/,
+    js_block_start_js_template_string: { match: "`", push: "js_template_string" },
+    js_block_start_new_block: { match: "{", push: "js_block" },
+    js_block_stop_block: { match: "}", pop: 1 },
+    js_block_everything_else: { match: /[\s\S]+?/, lineBreaks: true }
+  },
+  js_template_string: {
+    js_template_string_escaped_backslash: /\\\\/,
+    js_template_string_escaped_backtick: /\\`/,
+    js_template_string_escaped_dollarbrace: /\\\${`/,
+    js_template_string_start_new_block: { match: "${", push: "js_block" },
+    js_template_string_stop_string: { match: "`", pop: 1 },
+    js_template_string_everything_else: { match: /[\s\S]+?/, lineBreaks: true }
+  }
+});
+
 export function compile(code: string, path: string) {
+  if (path.endsWith(".sql")) {
+    // if (path.endsWith(".ben.sql")) {
+    let sql = "";
+    let config = "";
+    let js = "";
+    let state: "sql" | "js" | "config" = "sql";
+    lexer.reset(code);
+    for (const token of lexer) {
+      switch (token.type) {
+        case "sql_start_config": {
+          state = "config";
+          break;
+        }
+        case "sql_start_js": {
+          state = "js";
+          break;
+        }
+        case "sql_single_line_comment":
+        case "sql_multi_line_comment":
+        case "sql_single_quote_string":
+        case "sql_double_quote_string":
+        case "sql_start_new_block":
+        case "sql_everything_else": {
+          state = "sql";
+          break;
+        }
+      }
+      switch (state) {
+        case "sql": {
+          sql = sql + token.text;
+          break;
+        }
+        case "js": {
+          js = js + token.text;
+          break;
+        }
+        case "config": {
+          config = config + token.text;
+          break;
+        }
+      }
+    }
+    console.log("\n\n\n");
+    console.log("CONFIG FOLLOWS");
+    console.log(config);
+    console.log("\n\n\n");
+    console.log("JS FOLLOWS");
+    console.log(js);
+    console.log("\n\n\n");
+    console.log("SQL FOLLOWS");
+    console.log(sql);
+    console.log("\n\n\n");
+    return;
+  }
   if (path.endsWith(".assert.sql")) {
     return compileAssertionSql(code, path);
   }
@@ -83,7 +177,7 @@ export function extractJsBlocks(code: string): { sql: string; js: string } {
 }
 
 export function getFunctionPropertyNames(prototype: any) {
-  return Object.getOwnPropertyNames(prototype).filter(function (e, i, arr) {
+  return Object.getOwnPropertyNames(prototype).filter(function(e, i, arr) {
     if (e != arr[i + 1] && typeof prototype[e] == "function") {
       return true;
     }
