@@ -1,4 +1,4 @@
--- 00000010_incr_load_dim_member.sql
+-- 00000640_incr_load_dim_member.sql
 -- UPDATE MEMBERSHIP STATUS
 
 CREATE TEMPORARY TABLE dw_stg_incr_dim_member like dw.dim_member;
@@ -114,117 +114,6 @@ FROM
 		JOIN cmos.membership ms ON mt.term_membership = ms.id
 	WHERE	referring_retailer IS NOT NULL
 		AND LOWER(referring_retailer) <> 'null'
-	) x
-WHERE	dw_stg_incr_dim_member.member_id = x.member_id;
-
-UPDATE	dw_stg_incr_dim_member
-SET
-	acquisition_group=x.acquisition_group,
-	sponsor = x.sponsor,
-	sub_sponsor=x.sub_sponsor,
-	recent_signup_date = x.recent_signup_date
-FROM
-	(
-		SELECT
-		mt.member_id,
-		CASE WHEN LOWER(m.email) LIKE '%test%' THEN 'Exclude-Test'
-			 WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%membersave%' THEN 'Exclude-MemberSave'
-			 WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%cancelsave%' THEN 'Exclude-CancelSave'
-		--	 WHEN cancel_datetime IS NOT NULL THEN 'Canceled'
-			 WHEN (D.ACQUISITION_CHANNEL='emerging' OR (OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-01' AND '2018-03-12' OR
-			 (OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-15' AND '2018-03-20'))) THEN 'Emerging'
-			 WHEN d.acquisition_source='retailer' THEN 'PIK'
-			 ELSE 'Channel'
-			 END acquisition_group
-		,CASE WHEN (D.ACQUISITION_CHANNEL='emerging' OR (OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND mt.CREATED_DATE BETWEEN '2018-03-01' AND '2018-03-12' OR
-			(OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-15' AND '2018-03-20'))) THEN
-				CASE
-				WHEN (LOWER(ACQUISITION_CAMPAIGN) LIKE '%fb%' OR OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND mt.CREATED_DATE BETWEEN '2018-03-01' AND '2018-03-12') THEN 'Facebook'
-				WHEN ((OLTP_ACQUISITION_CAMPAIGN LIKE 'gg%' OR OLTP_ACQUISITION_CAMPAIGN LIKE 'gdn%') OR (OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-15' AND '2018-03-20')) THEN 'Google'
-				WHEN OLTP_ACQUISITION_CAMPAIGN LIKE 'yh%' THEN 'Yahoo'
-				WHEN OLTP_ACQUISITION_CAMPAIGN LIKE 'bg%' THEN 'Bing'
-				WHEN OLTP_ACQUISITION_CAMPAIGN LIKE 'dbm%' THEN 'Doubleclick'
-				ELSE 'Other Emerging'
-				END
-		WHEN D.acquisition_source='retailer' THEN
-					  CASE
-					  WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%spend and get%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%spend and get%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%spend_and_get%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%spend_and_get%' THEN 'ShopRunner'
-					  WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%trial%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%trial%' THEN 'ShopRunner'
-				      WHEN LOWER(begin_term_type) LIKE '%amex%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%amex%' OR lower(ACQUISITION_CAMPAIGN) LIKE '%americanexpress%' THEN 'Amex'
-					  WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%paypal%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%paypal%' THEN 'Paypal'
-					  WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%mastercard%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%mastercard%' THEN 'Mastercard'
-					  ELSE 'Unknown' END
-		WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%amex%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%amex%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%americanexpress%' THEN 'Amex'
-		WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%paypal%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%paypal%' THEN 'Paypal'
-		WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%mastercard%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%mastercard%' THEN 'Mastercard'
-		WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%tmobile%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%tmobile%' THEN 'T-Mobile'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%m2media%' THEN 'M2 Media'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%ups%' THEN 'UPS'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%redbox%' THEN 'Redbox'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%yahoo%' THEN 'Yahoo'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%verizon%' THEN 'Verizon'
-		WHEN LOWER(ACQUISITION_CAMPAIGN) LIKE '%accessdevelopment%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%accesschampion%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%founderscardfeb2018%' THEN 'Borislow'
-		when lower(acquisition_campaign) like '%ruelala_email_july2018%' then 'Ruelala'
-		WHEN D.paid='paid' THEN 'Paid for Membership'
-		ELSE 'Other Promotion' END sponsor
-		,CASE WHEN (D.ACQUISITION_CHANNEL='emerging' OR (OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-01' AND '2018-03-12' OR
-		(OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND m.CREATED_DATE BETWEEN '2018-03-15' AND '2018-03-20'))) THEN
-			CASE
-			WHEN OLTP_ACQUISITION_CAMPAIGN LIKE '%_nonbrand'	THEN 'NonBrand'
-			WHEN OLTP_ACQUISITION_CAMPAIGN LIKE '%_brand' THEN 'Brand'
-			WHEN OLTP_ACQUISITION_CAMPAIGN='SLMDec2017' AND mt.CREATED_DATE BETWEEN '2018-03-15' AND '2018-03-20'	THEN 'Brand'
-			ELSE 'Nonbrand'
-			END
-		WHEN D.acquisition_source='retailer' AND LOWER(ACQUISITION_CAMPAIGN) LIKE '%spend and get%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%spend and get%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%spend_and_get%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%spend_and_get%' THEN 'Spend and Get'
-		WHEN  D.acquisition_source='retailer' AND LOWER(ACQUISITION_CAMPAIGN) LIKE '%trial%' OR LOWER(BEGIN_TERM_TYPE) LIKE '%trial%' THEN 'Trial'
-		WHEN LOWER(begin_term_type) LIKE '%amex%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%amex%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%americanexpress%' THEN
-			CASE WHEN (LOWER(acquisition_campaign) like '%oce%' OR ACQUISITION_MISC IN ('1click', '1clickLM') ) THEN 'OCE'
-			WHEN (LOWER(ACQUISITION_CAMPAIGN) like '%trigger%' OR LOWER(ACQUISITION_MISC) LIKE '%trigger%' ) THEN 'Trigger'
-			WHEN LOWER(ACQUISITION_CAMPAIGN) like '%enrollmentpulse%' THEN 'Enrollment Pulse'
-			WHEN (LOWER(ACQUISITION_CAMPAIGN) like '%dsm' OR LOWER(ACQUISITION_MISC) LIKE '%dsm%') THEN 'DSM'
-			WHEN (LOWER(ACQUISITION_CAMPAIGN) like '%landingpage' OR LOWER(ACQUISITION_MISC) LIKE 'lp') THEN 'Landing Page'
-			WHEN (LOWER(mt.acquisition_source)='pik') THEN 'Amex PIK'
-			ELSE 'Amex Other'
-			END
-		WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%paypal%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%paypal%' THEN
-			CASE WHEN LOWER(ACQUISITION_CAMPAIGN) like '%_hv'  then 'High Value Email'
-	         WHEN LOWER(ACQUISITION_CAMPAIGN) like '%fallfashion%' then 'Fall Fashion Email'
-	         WHEN LOWER(ACQUISITION_CAMPAIGN) like '%genpop%' then 'General Population Email'
-	         WHEN LOWER(ACQUISITION_CAMPAIGN)='pik' then 'Paypal PIK'
-	         ELSE 'Paypal Other'
-	         END
-	    WHEN LOWER(BEGIN_TERM_TYPE) LIKE '%mastercard%' OR LOWER(ACQUISITION_CAMPAIGN) LIKE '%mastercard%'
-	   	THEN OWNER_ICA_NAME
-		ELSE 'Other'
-		END sub_sponsor
-		,md::DATE recent_signup_date
-		FROM
-			(
-			SELECT
-			MEMBER_ID
-			,MAX(CREATED_DATE) md
-			FROM
-			cmos.MEMBERSHIP_TERM mt
-			GROUP BY 1
-			) md
-		LEFT JOIN CMOS.MEMBERSHIP_TERM mt
-		ON md.MEMBER_ID=mt.MEMBER_ID
-		AND md.MD=mt.CREATED_DATE
-		LEFT JOIN  DW.DIM_MEMBER D ON mt.MEMBER_id=D.MEMBER_ID
-		LEFT JOIN cmos.MEMBER m
-		ON m.ID=mt.MEMBER_ID
-		LEFT JOIN
-		(
-		select LEFT(a.account_range_from,6) as bin_range_from,
-		LEFT(a.through,6) as bin_range_through,
-		max(TRIM(a.owner_ica_name)) as owner_ica_name,
-		max(TRIM(a.issuing_country)) as issuing_country
-		from reports.mastercard_issuer_account_ranges a
-		GROUP BY 1,2
-		order by 1,2,3,4
-		) MC
-		ON mt.ACQUISITION_CONTENT BETWEEN mc.bin_range_from AND mc.bin_range_through
-		GROUP BY 1,2,3,4,5
 	) x
 WHERE	dw_stg_incr_dim_member.member_id = x.member_id;
 
@@ -398,7 +287,12 @@ SET
 	pik_flow_first_referrer = p.first_referrer,
 	signup_device = p.device
 FROM	dw.fact_pik_signup_flow p
-WHERE	p.page IN ('rpik_std_signup_success', 'rpik_amex_signup_success', 'rpik_pik_personalize')
+WHERE	p.page IN ('rpik_std_signup_success', 'rpik_std_signup_complete',
+		   'rpik_amex_signup_success', 'rpik_amex_signup_complete',
+		   'rpik_mastercard_signup_success', 'rpik_mastercard_signup_complete',
+		   'rpik_email_only_success', 'rpik_email_only_complete',
+		   'rpik_paypal_signup_success', 'rpik_paypal_signup_complete',
+		   'rpik_pik_personalize', 'rpik_undefined_success')
 	AND p.member_id = dw_stg_incr_dim_member.member_id
 ;
 
@@ -448,11 +342,7 @@ SET
 	sr_signup_landing_page = t.sr_signup_landing_page,
 	activating_retailer_id = t.activating_retailer_id,
 	activating_retailer_name = t.activating_retailer_name,
-	signup_device = t.signup_device,
-	acquisition_group=t.acquisition_group,
-	sponsor=t.sponsor,
-	sub_sponsor=t.sub_sponsor,
-	recent_signup_date=t.recent_signup_date
+	signup_device = t.signup_device
 FROM	dw_stg_incr_dim_member t
 WHERE	t.member_id = dw.dim_member.member_id
 	AND t.member_id IN
@@ -490,11 +380,7 @@ WHERE	t.member_id = dw.dim_member.member_id
 		NVL(m.acquisition_medium, '') <> NVL(t.acquisition_medium, '') OR
 		NVL(m.activating_retailer_id, '') <> NVL(t.activating_retailer_id, '') OR
 		NVL(m.activating_retailer_name, '') <> NVL(t.activating_retailer_name, '')  OR
-		NVL(m.signup_device, '') <> NVL(t.signup_device, '') OR
-		NVL(m.acquisition_group, '') <> NVL(t.acquisition_group, '') OR
-		NVL(m.sponsor, '') <> NVL(t.sponsor, '') OR
-		NVL(m.sub_sponsor, '') <> NVL(t.sub_sponsor, '') OR
-		NVL(m.recent_signup_date, '1900-01-01') <> NVL(t.recent_signup_date, '1900-01-01')
+		NVL(m.signup_device, '') <> NVL(t.signup_device, '')
 		)
 	)
 	;
@@ -532,11 +418,7 @@ INSERT INTO dw.dim_member
 	sr_signup_landing_page,
 	activating_retailer_id,
 	activating_retailer_name,
-	signup_device,
-	acquisition_group,
-	sponsor,
-	sub_sponsor,
-	recent_signup_date
+	signup_device
 	)
 SELECT
 	member_id,
@@ -570,11 +452,7 @@ SELECT
 	sr_signup_landing_page,
 	activating_retailer_id,
 	activating_retailer_name,
-	signup_device,
-	acquisition_group,
-	sponsor,
-	sub_sponsor,
-	recent_signup_date
+	signup_device
 FROM	dw_stg_incr_dim_member
 WHERE	member_id NOT IN (SELECT member_id FROM dw.dim_member);
 
