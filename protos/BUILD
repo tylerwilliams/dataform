@@ -1,5 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
+filegroup(
+    name = "files",
+    srcs = glob(["**/*.proto"])
+)
+
 proto_library(
     name = "protos_lib",
     srcs = glob(["**/*.proto"]),
@@ -41,3 +46,4 @@ dataform_npm_package(
     ],
     deps = [":protos"],
 )
+

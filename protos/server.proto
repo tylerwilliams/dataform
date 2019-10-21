@@ -1,0 +1,20 @@
+syntax="proto3";
+
+package dataform.server;
+
+import "protos/core.proto";
+
+message Empty {}
+
+message InitializeRequest {
+    ProjectConfig project_config = 1;
+}
+
+message InitializeCredentialsRequest {
+    
+}
+
+service Service {
+    rpc Initialize (dataform.server.InitializeRequest) returns (dataform.server.Empty);
+    rpc InitializeCredentials (dataform.server.InitializeCredentialsRequest) returns (dataform.server.Empty);
+}

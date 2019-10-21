@@ -50,7 +50,7 @@ const projectDirOption: INamedOption<yargs.PositionalOptions> = {
 
 const projectDirMustExistOption = {
   ...projectDirOption,
-  check: (argv: yargs.Arguments) => {
+  check: (argv: any) => {
     assertPathExists(argv["project-dir"]);
     try {
       assertPathExists(path.resolve(argv["project-dir"], "dataform.json"));
@@ -106,7 +106,7 @@ const schemaSuffixOverrideOption: INamedOption<yargs.Options> = {
   option: {
     describe: "A suffix to be appended to output schema names."
   },
-  check: (argv: yargs.Arguments) => {
+  check: (argv: any) => {
     if (argv.schemaSuffix && !/^[a-zA-Z_0-9]+$/.test(argv.schemaSuffix)) {
       throw new Error(
         "--schema-suffix should contain only alphanumeric characters and/or underscores."
@@ -122,7 +122,7 @@ const credentialsOption: INamedOption<yargs.Options> = {
     default: credentials.CREDENTIALS_FILENAME,
     coerce: actuallyResolve
   },
-  check: (argv: yargs.Arguments) => assertPathExists(argv.credentials)
+  check: (argv: any) => assertPathExists(argv.credentials)
 };
 
 const warehouseOption: INamedOption<yargs.PositionalOptions> = {
