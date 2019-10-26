@@ -59,6 +59,19 @@ interface IOptions {
   port: number;
 }
 
+function corsResponse() {
+  return {
+    "Access-Control-Allow-Credentials": "true",
+    "Access-Control-Allow-Headers":
+      "Content-Type, X-Auth0-Access-Token, X-Auth0-Id-Token, X-Grpc-Web",
+    "Access-Control-Allow-Methods": "POST",
+    "Access-Control-Allow-Origin": "http://localhost:8080",
+    "Access-Control-Max-Age": 600,
+    "Content-Length": 0,
+    // Date: "Fri, 25 Oct 2019 18:28:08 GMT",
+    Vary: "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+  };
+}
 export class GrpcWebProxy {
   private webServer: http2.Http2Server;
   private grpcClient: http2.ClientHttp2Session;
@@ -81,25 +94,24 @@ export class GrpcWebProxy {
     // });
     this.grpcClient = http2.connect(backend);
     this.grpcClient.on("error", error => {
-        console.log("ongrpcclienterror");
+      console.log("ongrpcclienterror");
       console.log(error);
     });
     this.grpcClient.on("connect", () => {
-        console.log("ongrpcclientconnect");
+      console.log("ongrpcclientconnect");
     });
     this.grpcClient.on("altsvc", () => {
-        console.log("ongrpcclientaltsvc");
-    })
+      console.log("ongrpcclientaltsvc");
+    });
     this.grpcClient.on("stream", () => {
-        console.log("ongrpcclientstream");
-    })
+      console.log("ongrpcclientstream");
+    });
   }
 
-  private handleGrpcWebRequest(
+  private async handleGrpcWebRequest(
     webStream: http2.ServerHttp2Stream,
     webHeaders: http2.IncomingHttpHeaders
   ) {
-    
     const contentType = webHeaders["content-type"] || grpcWebContentType;
     const incomingContentType = grpcWebContentType;
     const isTextFormat = contentType.startsWith(grpcWebTextContentType);
@@ -108,37 +120,51 @@ export class GrpcWebProxy {
       throw new Error("Unsupported");
     }
 
+    if (webHeaders[":method"] === "OPTIONS") {
+      webStream.respond({ ...corsResponse(), ":status": 200 });
+      webStream.end();
+      return;
+    }
+
     const grpcRequestHeaders: http2.OutgoingHttpHeaders = { ...webHeaders };
+    // Object.keys(webHeaders)
+    //   .filter(key => [":method", ":path"].includes(key))
+    //   .forEach(key => (grpcRequestHeaders[key] = webHeaders[key]));
     grpcRequestHeaders["content-type"] = contentType.replace(incomingContentType, grpcContentType);
     delete grpcRequestHeaders["content-length"];
     grpcRequestHeaders.ProtoMajor = 2;
     grpcRequestHeaders.ProtoMinor = 0;
+    // grpcRequestHeaders[":method"] = "POST";
+    grpcRequestHeaders.TE = "trailers";
     console.log(grpcRequestHeaders);
 
     try {
       const grpcRequest = this.grpcClient.request(grpcRequestHeaders);
+      // grpcRequest.setEncoding("utf8");
+      // await new Promise(resolve => setTimeout(() => resolve(), 10000));
+
       console.log("grpcrequestcreated");
 
       webStream.on("data", chunk => {
         console.log("ondata");
-        grpcRequest.write(chunk);
+        try {
+          grpcRequest.write(chunk);
+          console.log("wrotegrpcdata");
+        } catch (e) {
+          console.error(e);
+        }
       });
       webStream.on("close", () => {
         console.log("onclose");
-        // grpcRequest.end();
+        grpcRequest.end();
       });
-
-      grpcRequest.on("headers", headers => {
-          console.log("ongrpcresponseheaders");
-      })
       grpcRequest.on("response", (headers, flags) => {
         console.log("ongrpcresponse");
         webStream.respond(cleanResponseHeaders(headers));
-        // Copy new headers over.
-        // Object.apply(webResponseHeaders, prepareHeaders(headers, webResponseHeaders));
       });
       grpcRequest.on("trailers", (headers, flags) => {
         console.log("ongrpctrailers");
+        console.log(headers);
         webStream.write(trailersToPayload(headers));
       });
       grpcRequest.on("data", chunk => {
@@ -164,10 +190,15 @@ export class GrpcWebProxy {
 function cleanResponseHeaders(grpcHeaders: http2.IncomingHttpHeaders): http2.OutgoingHttpHeaders {
   const newHeaders: http2.OutgoingHttpHeaders = { ...grpcHeaders };
   // The original content type was grpc, change to web.
-  newHeaders["content-type"] = grpcWebContentType;
-  newHeaders["access-control-expose-headers"] = [
-    "grpc-status",
-    "grpc-message",
+  delete newHeaders["content-type"];
+  delete newHeaders[":status"];
+  newHeaders["Content-Type"] = grpcContentType;
+  newHeaders["Access-Control-Allow-Origin"] = "http://localhost:8080";
+  newHeaders["Access-Control-Allow-Credentials"] = "true";
+  newHeaders["grpc-status"] = 0;
+  newHeaders["Access-Control-Expose-Headers"] = [
+    // "Grpc-Status",
+    // "Grpc-Message",
     ...Object.keys(newHeaders)
   ].join(", ");
   return newHeaders;
@@ -176,14 +207,20 @@ function cleanResponseHeaders(grpcHeaders: http2.IncomingHttpHeaders): http2.Out
 function trailersToPayload(trailerHeaders: http2.IncomingHttpHeaders) {
   const headersBuffer = Buffer.from(
     Object.keys(trailerHeaders)
-      .map(key => `${key} = ${trailerHeaders[key]}`)
-      .join("\r\n")
+      .filter(key => ["grpc-status"].includes(key))
+      .map(key => `${key}: ${trailerHeaders[key]}\r\n`).join("")
   );
-  const trailerGrpcDataHeader = new Uint8Array([128, 0, 0, 0, 0]); // MSB=1 indicates this is a trailer data frame.
-  const trailerGrpcDataHeaderView = new DataView(trailerGrpcDataHeader);
-  trailerGrpcDataHeaderView.setUint32(1, headersBuffer.byteLength, false);
+  const buffer = new ArrayBuffer(5);
+  const uint8View = new Uint8Array(buffer);
+  const uint32View = new Uint8Array(buffer);
+  uint8View.set([128], 0);
+  uint32View.set([headersBuffer.byteLength], 1);
+  // const trailerGrpcDataHeader = new Uint8Array([128, 0, 0, 0, 0]); // MSB=1 indicates this is a trailer data frame.
+  // const trailerGrpcDataHeaderView = new DataView(trailerGrpcDataHeader);
+  // trailerGrpcDataHeaderView.setUint32(1, headersBuffer.byteLength, false);
 
-  return Buffer.concat([trailerGrpcDataHeader, headersBuffer]);
+  // console.log(buffer);
+  return Buffer.concat([uint8View, headersBuffer]);
 }
 
 function getTrailerPayload(
@@ -192,9 +229,7 @@ function getTrailerPayload(
 ) {
   const trailers = extractTrailingHeaders(grpcHeaders, flushedWebHeaders);
   const headersBuffer = Buffer.from(
-    Object.keys(trailers)
-      .map(key => `${key} = ${trailers[key]}`)
-      .join("\r\n")
+    Object.keys(trailers).map(key => `${key} = ${trailers[key]}\r\n`)
   );
   const trailerGrpcDataHeader = new Uint8Array([128, 0, 0, 0, 0]); // MSB=1 indicates this is a trailer data frame.
   const trailerGrpcDataHeaderView = new DataView(trailerGrpcDataHeader);
