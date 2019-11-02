@@ -32,6 +32,7 @@ ts_library(
     deps = [
         ":css_typings",
         "//protos",
+        "//tools/protobufjs:grpc_web_rpc_impl",
         "@npm//@blueprintjs/core",
         "@npm//@types/node",
         "@npm//@types/react",

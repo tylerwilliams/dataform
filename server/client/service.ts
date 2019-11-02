@@ -1,5 +1,5 @@
 import { dataform } from "@dataform/protos";
-import { rpcImpl } from "@dataform/tools/protobufjs/grpc_web_rpc_impl";
+import { rpcImpl } from "df/tools/protobufjs/grpc_web_rpc_impl";
 
 export class Service extends dataform.server.Service {
   public static get(): Service {
@@ -11,6 +11,6 @@ export class Service extends dataform.server.Service {
   private static instance: Service;
 
   constructor() {
-    super(rpcImpl("http://localhost:8000", "ViewService"), false, false);
+    super(rpcImpl("https://127.0.0.1:8000", "Service"), false, false);
   }
 }

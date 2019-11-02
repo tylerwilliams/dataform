@@ -25,7 +25,7 @@ export class Server {
   }
 }
 
-const args = yargs.option("http-port", { default: 8080 }).option("grpc-port", { default: 8002 })
+const args = yargs.option("http-port", { default: 8080 }).option("grpc-port", { default: 8001 })
   .argv;
 
 const server = new Server(args["grpc-port"]);
