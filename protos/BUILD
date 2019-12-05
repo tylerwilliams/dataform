@@ -41,3 +41,19 @@ dataform_npm_package(
     ],
     deps = [":protos"],
 )
+
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+
+proto_library(
+    name = "dataform",
+    srcs = [
+        ":core.proto",
+        ":profiles.proto",
+    ],
+)
+
+go_proto_library(
+    name = "dataform_go",
+    importpath = "github.com/dataform-co/dataform/protos",
+    proto = ":dataform",
+)
