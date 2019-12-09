@@ -16,8 +16,8 @@ ts_library(
         "@npm//tarjan-graph",
     ],
     data = [
-        ":package.json"
-    ]
+        ":package.json",
+    ],
 )
 
 load("//tools/npm:package.bzl", "dataform_npm_package")
