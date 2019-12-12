@@ -2,6 +2,8 @@ syntax="proto3";
 
 package dataform;
 
+option go_package = "github.com/dataform-co/dataform/protos/dataform";
+
 option java_package = "com.dataform.protos";
 option java_outer_classname = "CoreMeta";
 option java_multiple_files = true;

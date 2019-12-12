@@ -1,5 +1,7 @@
 syntax="proto3";
 
+option go_package = "github.com/dataform-co/dataform/protos/dataform";
+
 package dataform;
 
 message JDBC {

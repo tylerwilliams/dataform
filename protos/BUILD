@@ -24,10 +24,10 @@ load("@npm_bazel_typescript//:index.bzl", "ts_library")
 ts_library(
     name = "protos",
     srcs = glob(["index.ts"]),
-    module_name = "@dataform/protos",
     data = [
         "//protos:protobufjs_lib",
     ],
+    module_name = "@dataform/protos",
     deps = [
         "//protos:protobufjs_lib",
         "@npm//@types/node",
@@ -62,12 +62,12 @@ proto_library(
 
 go_proto_library(
     name = "dataform_go_proto",
-    importpath = "github.com/dataform-co/dataform/protos",
+    importpath = "github.com/dataform-co/dataform/protos/dataform",
     proto = ":dataform_proto",
 )
 
 go_proto_library(
     name = "schedules_go_proto",
-    importpath = "github.com/dataform-co/dataform/protos",
+    importpath = "github.com/dataform-co/dataform/protos/dataform/schedules",
     proto = ":schedules_proto",
 )
