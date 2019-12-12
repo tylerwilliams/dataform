@@ -1,17 +1,20 @@
 package protojson
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dataform-co/dataform/protos/dataform"
 	"github.com/golang/protobuf/descriptor"
+	"github.com/golang/protobuf/proto"
 )
 
-func TestMarshalToString(t *testing.T) {
-	tests := []struct {
-		name string
-		pb   descriptor.Message
-		want string
+var (
+	tests = []struct {
+		name    string
+		pb      descriptor.Message
+		emptyPb descriptor.Message
+		jsonStr string
 	}{
 		{
 			name: "simple message",
@@ -20,7 +23,8 @@ func TestMarshalToString(t *testing.T) {
 				DefaultSchema:           "bar",
 				IdempotentActionRetries: 32,
 			},
-			want: "{\"1\":\"foo\",\"2\":\"bar\",\"8\":32}",
+			emptyPb: &dataform.ProjectConfig{},
+			jsonStr: "{\"1\":\"foo\",\"2\":\"bar\",\"8\":32}",
 		},
 		{
 			name: "message with repeated fields",
@@ -29,7 +33,8 @@ func TestMarshalToString(t *testing.T) {
 				Tags:        []string{"baz", "qux"},
 				FullRefresh: true,
 			},
-			want: "{\"1\":[\"foo\",\"bar\"],\"2\":true,\"5\":[\"baz\",\"qux\"]}",
+			emptyPb: &dataform.RunConfig{},
+			jsonStr: "{\"1\":[\"foo\",\"bar\"],\"2\":true,\"5\":[\"baz\",\"qux\"]}",
 		},
 		{
 			name: "message with submessage",
@@ -41,7 +46,8 @@ func TestMarshalToString(t *testing.T) {
 					IdempotentActionRetries: 16,
 				},
 			},
-			want: "{\"1\":\"foo\",\"3\":{\"1\":\"bar\",\"2\":\"baz\",\"8\":16}}",
+			emptyPb: &dataform.CompileConfig{},
+			jsonStr: "{\"1\":\"foo\",\"3\":{\"1\":\"bar\",\"2\":\"baz\",\"8\":16}}",
 		},
 		{
 			name: "message with repeated submessage",
@@ -56,7 +62,8 @@ func TestMarshalToString(t *testing.T) {
 					},
 				},
 			},
-			want: "{\"1\":\"foo\",\"2\":[{\"1\":\"bar\"},{\"1\":\"baz\"}]}",
+			emptyPb: &dataform.ActionDescriptor{},
+			jsonStr: "{\"1\":\"foo\",\"2\":[{\"1\":\"bar\"},{\"1\":\"baz\"}]}",
 		},
 		{
 			name: "message with oneof",
@@ -66,17 +73,35 @@ func TestMarshalToString(t *testing.T) {
 					"bar",
 				},
 			},
-			want: "{\"1\":\"foo\",\"2\":\"bar\"}",
+			emptyPb: &dataform.Field{},
+			jsonStr: "{\"1\":\"foo\",\"2\":\"bar\"}",
 		},
 	}
+)
+
+func TestMarshalToString(t *testing.T) {
 	for _, testCase := range tests {
 		m := &Marshaler{}
 		got, err := m.MarshalToString(testCase.pb)
 		if err != nil {
 			t.Error(err)
 		}
-		if got != testCase.want {
-			t.Errorf("called MarshalToString for %q, got %q, want %q", testCase.name, got, testCase.want)
+		if got != testCase.jsonStr {
+			t.Errorf("called MarshalToString for %q, got %q, want %q", testCase.name, got, testCase.jsonStr)
+		}
+	}
+}
+
+func TestUnmarshal(t *testing.T) {
+	for _, testCase := range tests {
+		u := &Unmarshaler{}
+		got := testCase.emptyPb
+		err := u.Unmarshal(strings.NewReader(testCase.jsonStr), got)
+		if err != nil {
+			t.Error(err)
+		}
+		if !proto.Equal(got, testCase.pb) {
+			t.Errorf("called Unmarshal for %q, got %q, want %q", testCase.name, got, testCase.pb)
 		}
 	}
 }

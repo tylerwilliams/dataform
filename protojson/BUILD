@@ -22,5 +22,6 @@ go_test(
     deps = [
         "//protos:dataform_go_proto",
         "@com_github_golang_protobuf//descriptor:go_default_library_gen",
+        "@com_github_golang_protobuf//proto:go_default_library",
     ],
 )
