@@ -15,10 +15,7 @@ type ProtobufCodec struct {
 
 func (e *ProtobufCodec) EncodeValue(ectx bsoncodec.EncodeContext, vw bsonrw.ValueWriter, val reflect.Value) error {
 	oneofs := oneofNames(val.Interface().(descriptor.Message))
-	if val.Kind() == reflect.Interface {
-		val = val.Elem()
-	}
-	if val.Kind() == reflect.Ptr {
+	for val.Kind() != reflect.Struct {
 		val = val.Elem()
 	}
 	props := proto.GetProperties(val.Type())
