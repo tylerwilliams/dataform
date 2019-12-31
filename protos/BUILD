@@ -74,28 +74,3 @@ dataform_npm_package(
     ],
     deps = [":protos"],
 )
-
-proto_library(
-    name = "dataform_proto",
-    srcs = [
-        "core.proto",
-        "profiles.proto",
-    ],
-)
-
-proto_library(
-    name = "schedules_proto",
-    srcs = ["schedules.proto"],
-)
-
-go_proto_library(
-    name = "dataform_go_proto",
-    importpath = "github.com/dataform-co/dataform/protos/dataform",
-    proto = ":dataform_proto",
-)
-
-go_proto_library(
-    name = "schedules_go_proto",
-    importpath = "github.com/dataform-co/dataform/protos/dataform/schedules",
-    proto = ":schedules_proto",
-)
