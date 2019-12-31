@@ -56,8 +56,7 @@ load("@npm_bazel_typescript//:index.bzl", "ts_setup_workspace")
 
 ts_setup_workspace()
 
-# buildifier is written in Go and hence needs rules_go to be built.
-# See https://github.com/bazelbuild/rules_go for the up to date setup instructions.
+# Go/Gazelle requirements.
 http_archive(
     name = "io_bazel_rules_go",
     sha256 = "e88471aea3a3a4f19ec1310a55ba94772d087e9ce46e41ae38ecebe17935de7b",
