@@ -3,20 +3,48 @@ load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 package(default_visibility = ["//visibility:public"])
 
 proto_library(
-    name = "protos_lib",
-    srcs = glob(["**/*.proto"]),
+    name = "dataform_proto",
+    srcs = [
+        "core.proto",
+        "profiles.proto",
+    ],
+)
+
+proto_library(
+    name = "schedules_proto",
+    srcs = ["schedules.proto"],
 )
 
 java_proto_library(
-    name = "java",
-    deps = [":protos_lib"],
+    name = "dataform_java_proto",
+    deps = [":dataform_proto"],
+)
+
+java_proto_library(
+    name = "schedules_java_proto",
+    deps = [":schedules_proto"],
+)
+
+go_proto_library(
+    name = "dataform_go_proto",
+    importpath = "github.com/dataform-co/dataform/protos/dataform",
+    proto = ":dataform_proto",
+)
+
+go_proto_library(
+    name = "schedules_go_proto",
+    importpath = "github.com/dataform-co/dataform/protos/dataform/schedules",
+    proto = ":schedules_proto",
 )
 
 load("//tools:ts_proto_library.bzl", "ts_proto_library")
 
 ts_proto_library(
     name = "protobufjs_lib",
-    deps = [":protos_lib"],
+    deps = [
+        ":dataform_proto",
+        ":schedules_proto",
+    ],
 )
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
