@@ -4,7 +4,7 @@ load("//tools:css_typings.bzl", "css_typings")
 
 filegroup(
     name = "assets",
-    srcs = glob(["**/*.html"])
+    srcs = glob(["**/*.html"]),
 )
 
 filegroup(
@@ -39,70 +39,59 @@ ts_library(
         "@npm//@types/react-dom",
         "@npm//@types/react-router",
         "@npm//@types/react-router-dom",
+        "@npm//protobufjs",
         "@npm//react",
         "@npm//react-dom",
         "@npm//react-router",
         "@npm//react-router-dom",
-        "@npm//protobufjs"
     ],
 )
 
-ts_library(
-    name = "bundler-lib",
-    srcs = ["webpack.ts"],
-    deps = [
-        "//tools/webpack",
-        "@npm//@types/node",
-        "@npm//@types/webpack",
-        "@npm//babel-loader",
-        "@npm//babel-plugin-transform-runtime",
-        "@npm//babel-preset-env",
-        "@npm//css-loader",
-        "@npm//style-loader",
-        "@npm//umd-compat-loader",
-        "@npm//webpack",
-    ],
-)
+load("@npm//webpack-dev-server:index.bzl", "webpack_dev_server")
 
-load("@build_bazel_rules_nodejs//:defs.bzl", "nodejs_binary")
-
-nodejs_binary(
+webpack_dev_server(
     name = "devserver",
-    data = [
-        ":client",
-        ":bundler",
-        ":assets",
-    ],
-    entry_point = ":webpack.ts",
-    tags = [
-        "ibazel_notify_changes",
-    ],
-    templated_args = [
+    args = [
+        "--config=server/client/webpack.config.js",
         "--output=./app.bundle.js",
-        "--entry=df/server/client/index",
-        "--mode=development",
-        "--devserver",
+    ],
+    data = [
+        ":assets",
+        ":client",
+        ":webpack.config.js",
+        "@npm//webpack-cli",
+    ],
+    tags = [
+        # "ibazel_notify_changes",
     ],
 )
 
-nodejs_binary(
+load("@npm//webpack:index.bzl", "webpack")
+
+webpack(
     name = "bundler",
     data = [
+        ":assets",
         ":client",
-        ":bundler-lib",
-        ":css",
+        ":webpack.config.js",
+        "@npm//webpack-cli",
     ],
-    entry_point = ":webpack.ts",
 )
 
-load("//tools/webpack:webpack_bundle.bzl", "webpack_bundle")
+load("@build_bazel_rules_nodejs//:index.bzl", "npm_package_bin")
 
-webpack_bundle(
+npm_package_bin(
     name = "bundle",
-    bundler = ":bundler",
-    data = ["//:tsconfig.json"],
-    entry = "df/server/client/index",
-    outputs = [
-        "app.bundle.js"
+    outs = [
+        "app.bundle.js",
     ],
+    args = [
+        "--config=server/client/webpack.config.js",
+        "--output=$(location app.bundle.js)",
+    ],
+    data = [
+        ":webpack.config.js",
+        "@npm//umd-compat-loader",
+    ],
+    tool = ":bundler",
 )

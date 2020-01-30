@@ -9,7 +9,7 @@ export class ServiceImpl implements Service {
   public async initialize(
     call: grpc.ServerUnaryCall<protos.server.IInitializeRequest>
   ): Promise<protos.server.IEmpty> {
-    throw new Error("Method not implemented.");
+    return {};
   }
 
   public initializeCredentials(

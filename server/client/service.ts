@@ -11,6 +11,6 @@ export class Service extends dataform.server.Service {
   private static instance: Service;
 
   constructor() {
-    super(rpcImpl("https://127.0.0.1:8000", "Service"), false, false);
+    super(rpcImpl("http://localhost:9111", "Service"), false, false);
   }
 }

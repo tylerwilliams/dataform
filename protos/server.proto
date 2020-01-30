@@ -14,7 +14,17 @@ message InitializeCredentialsRequest {
     
 }
 
+message ProjectStateResponse {
+    bool exists = 1;
+}
+
+message CompileResponse {
+    dataform.CompiledGraph graph = 1;
+}
+
 service Service {
+    rpc Compile (dataform.server.Empty) returns (dataform.server.CompileResponse);
+    rpc ProjectState (dataform.server.Empty) returns (dataform.server.ProjectStateResponse);
     rpc Initialize (dataform.server.InitializeRequest) returns (dataform.server.Empty);
     rpc InitializeCredentials (dataform.server.InitializeCredentialsRequest) returns (dataform.server.Empty);
 }

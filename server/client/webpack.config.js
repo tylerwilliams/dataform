@@ -1,6 +1,6 @@
-import { BazelResolverPlugin, IBazelWebpackConfiguration, run } from "df/tools/webpack";
-import * as path from "path";
-import * as webpack from "webpack";
+const path = require("path");
+const webpack = require("webpack");
+const fs = require("fs");
 
 // Notable things:
 // - We don't set the output, must be set on the command line
@@ -8,16 +8,16 @@ import * as webpack from "webpack";
 // - We user require.resolve so that webpack can find these modules in a Bazel context
 // - The tsconfig paths plugin fixes file resolution in a bazel context (dfco/)
 
-run(options => {
-  const config: IBazelWebpackConfiguration = {
-    mode: options.mode,
-    entry: [options.entry],
+module.exports = (env, argv) => {
+  const config = {
+    mode: argv.mode || "development",
+    entry: [path.resolve(process.env.RUNFILES, "df/server/client/index")],
     output: {
-      path: path.dirname(path.resolve(options.output)),
-      filename: path.basename(options.output)
+      path: path.dirname(path.resolve(argv.output)),
+      filename: path.basename(argv.output)
     },
     optimization: {
-      minimize: options.mode === "production"
+      minimize: argv.mode === "production"
     },
     watchOptions: {
       ignored: [/node_modules/]
@@ -40,8 +40,12 @@ run(options => {
     },
     resolve: {
       extensions: [".ts", ".tsx", ".js", ".jsx", ".json", ".css"],
-      plugins: [new BazelResolverPlugin()]
+      alias: {
+        "@dataform": path.resolve(process.env.RUNFILES, "df"),
+        df: path.resolve(process.env.RUNFILES, "df")
+      }
     },
+
     plugins: [
       new webpack.optimize.LimitChunkCountPlugin({
         // Unfortunately chunking is having some issues. I think we can live with a big chunk for now.
@@ -53,15 +57,15 @@ run(options => {
         {
           test: /\.css$/,
           include: /node_modules/,
-          use: [require.resolve("style-loader"), require.resolve("css-loader")]
+          use: ["style-loader", "css-loader"]
         },
         {
           test: /\.css$/,
           exclude: /node_modules/,
           use: [
-            { loader: require.resolve("style-loader") },
+            { loader: "style-loader" },
             {
-              loader: require.resolve("css-loader"),
+              loader: "css-loader",
               query: {
                 modules: true,
                 namedExport: true,
@@ -73,19 +77,19 @@ run(options => {
         {
           test: /\.jsx?$/,
           exclude: /node_modules/,
-          use: [{ loader: require.resolve("umd-compat-loader") }]
+          use: [{ loader: "umd-compat-loader" }]
         }
       ]
     }
   };
   // Only add the babel transpilation in production mode.
-  if (options.mode === "production") {
+  if (argv.mode === "production") {
     config.module.rules.push({
       test: /\.jsx?$/,
       exclude: /node_modules/,
       use: [
         {
-          loader: require.resolve("babel-loader"),
+          loader: "babel-loader",
           options: {
             presets: [["env", { targets: { browsers: ["defaults"] } }]],
             plugins: [
@@ -103,4 +107,4 @@ run(options => {
     });
   }
   return config;
-});
+};

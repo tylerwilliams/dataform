@@ -1,16 +1,16 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@build_bazel_rules_nodejs//:defs.bzl", "nodejs_binary")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 
 exports_files([
-    "ts_grpc_service.bzl"
+    "ts_grpc_service.bzl",
 ])
 
 ts_library(
     name = "grpc_web_rpc_impl",
     srcs = glob([
-        "grpc_web_rpc_impl.ts"
+        "grpc_web_rpc_impl.ts",
     ]),
     deps = [
         "//protos",
@@ -33,10 +33,10 @@ ts_library(
 
 nodejs_binary(
     name = "generate_service_defs",
-    bootstrap = ["source-map-support/register"],
     data = [
         ":generate_service_defs_lib",
         "@npm//source-map-support",
     ],
     entry_point = ":generate_service_defs.ts",
+    templated_args = ["--node_options=--require=source-map-support/register"],
 )
