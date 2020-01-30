@@ -1,0 +1,55 @@
+@use "colors";
+@use "common";
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.listCondensed .listItem {
+}
+
+.listItem {
+  padding: 14px 2px;
+  display: flex;
+  border-bottom: 1px solid #d1d1d1;
+  align-items: center;
+  flex-direction: row;
+
+  > :not(:last-child) {
+    margin-right: 10px;
+  }
+}
+
+.list:not(.listCondensed) .listItem {
+  min-height: 60px;
+}
+
+.listItem:last-of-type {
+  border-bottom: none;
+}
+
+a .listItem:hover {
+  background-color: #a7b6c24d;
+}
+
+.listItemFill {
+  flex-grow: 1;
+  flex-shrink: 1;
+}
+
+.listItemDisabled,
+.listItemDisabled:hover {
+  color: #5c708080;
+  background-color: #ced9e080;
+}
+
+a .listItem {
+  color: colors.$text;
+}
+
+a .listItem:hover {
+  color: colors.$text;
+  text-decoration: none;
+}

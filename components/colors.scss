@@ -1,0 +1,42 @@
+$text: #3a3a3a;
+$background: #f4f7fa;
+$backgroundDark: #dfe7ec;
+
+$primary: rgb(47, 65, 155);
+$primaryBackground: #e0e2f0;
+
+$success: rgb(15, 153, 96);
+$successBackground: #eafbf5;
+
+$warning: rgb(217, 130, 43);
+$warningBackground: #fff3e7;
+
+$danger: rgb(219, 55, 55);
+$dangerBackground: #fae1e1;
+
+$gitGreen: #2cbe4e;
+$gitOrange: #dbab09;
+$gitRed: #cb2431;
+
+:export {
+  text: $text;
+
+  background: $background;
+  backgroundDark: $backgroundDark;
+
+  primary: $primary;
+  primaryBackground: $primaryBackground;
+
+  success: $success;
+  successBackground: $successBackground;
+
+  warning: $warning;
+  warningBackground: $warningBackground;
+
+  danger: $danger;
+  dangerBackground: $dangerBackground;
+
+  gitGreen: $gitGreen;
+  gitOrange: $gitOrange;
+  gitRed: $gitRed;
+}

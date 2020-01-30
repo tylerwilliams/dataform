@@ -1,0 +1,56 @@
+@use "common";
+
+.cardContainer {
+  @include common.bordered;
+
+  display: flex;
+  margin-bottom: 10px;
+  max-width: 100%;
+  padding: 0;
+  background-color: white;
+}
+
+.cardActions {
+  display: flex;
+  justify-content: flex-start;
+
+  *:not(:first-child) {
+    margin-left: 10px;
+  }
+}
+
+.cardActionsSpacer {
+  flex-grow: 1;
+}
+
+.cardHeaderContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #d1d1d1;
+  height: 55px;
+}
+
+.cardMainContainer {
+  display: inline-flex;
+  flex-direction: column;
+  flex-grow: 1;
+  max-width: 100%;
+}
+
+.cardSecondaryActionsContainer {
+  display: flex;
+}
+
+.cardContentContainer {
+  > *:not(.cardMedia) {
+    margin: 20px;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-row-gap: 20px;
+  grid-column-gap: 20px;
+}

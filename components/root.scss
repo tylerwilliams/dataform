@@ -1,0 +1,94 @@
+.root {
+  font-family: "Open Sans", "Lato", "sans-serif";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #191919;
+  font-size: 14px;
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: "Lato";
+  }
+
+  * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  a {
+    text-decoration: none;
+  }
+
+  p {
+    margin: 10px 0px 10px;
+    line-height: 24px;
+  }
+
+  pre {
+    margin: 0px;
+    white-space: pre-wrap;
+    white-space: -moz-pre-wrap;
+    white-space: -pre-wrap;
+    white-space: -o-pre-wrap;
+    word-wrap: break-word;
+  }
+}
+
+// Global normalization.
+
+:global body {
+  margin: 0;
+}
+
+:global ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+  background-color: transparent;
+}
+
+:global ::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+:global ::-webkit-scrollbar-thumb {
+  background-color: #aaa;
+}
+
+// Blueprint overrides.
+
+:global .bp3-popover .bp3-menu {
+  max-height: 600px;
+  overflow: auto;
+}
+
+:global .bp3-navbar .bp3-control {
+  margin: 0px;
+}
+
+:global .bp3-callout-title {
+  display: inline;
+  margin-left: 10px;
+}
+
+:global .bp3-callout {
+  width: unset;
+}
+
+:global .bp3-callout-icon {
+  margin-right: 0px;
+}
+
+:global .bp3-tree-node-content {
+  height: 36px;
+}
+
+:global table.bp3-html-table td {
+  vertical-align: middle;
+}
+
+:global iframe {
+  border: none;
+}

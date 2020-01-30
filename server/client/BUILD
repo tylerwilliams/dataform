@@ -4,7 +4,10 @@ load("//tools:css_typings.bzl", "css_typings")
 
 filegroup(
     name = "assets",
-    srcs = glob(["**/*.html"]),
+    srcs = glob([
+        "**/*.html",
+        "public/**/*.*",
+    ]),
 )
 
 filegroup(
