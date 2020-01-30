@@ -1,14 +1,12 @@
+import { IAdapter } from "@dataform/core/adapters";
+import { Adapter } from "@dataform/core/adapters/base";
+import { Task, Tasks } from "@dataform/core/tasks";
 import { dataform } from "@dataform/protos";
-import { Task, Tasks } from "../tasks";
-import { Adapter } from "./base";
-import { IAdapter } from "./index";
+import * as semver from "semver";
 
 export class RedshiftAdapter extends Adapter implements IAdapter {
-  private project: dataform.IProjectConfig;
-
-  constructor(project: dataform.IProjectConfig) {
-    super();
-    this.project = project;
+  constructor(private readonly project: dataform.IProjectConfig, dataformCoreVersion: string) {
+    super(dataformCoreVersion);
   }
 
   public resolveTarget(target: dataform.ITarget) {
@@ -21,23 +19,25 @@ export class RedshiftAdapter extends Adapter implements IAdapter {
     tableMetadata: dataform.ITableMetadata
   ): Tasks {
     const tasks = Tasks.create();
-    // Drop the existing view or table if we are changing it's type.
+
+    this.preOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
     if (tableMetadata && tableMetadata.type !== this.baseTableType(table.type)) {
       tasks.add(
         Task.statement(this.dropIfExists(table.target, this.oppositeTableType(table.type)))
       );
     }
+
     if (table.type === "incremental") {
-      if (runConfig.fullRefresh || !tableMetadata || tableMetadata.type === "view") {
+      if (!this.shouldWriteIncrementally(runConfig, tableMetadata)) {
         tasks.addAll(this.createOrReplace(table));
       } else {
-        // The table exists, insert new rows.
         tasks.add(
           Task.statement(
             this.insertInto(
               table.target,
               tableMetadata.fields.map(f => f.name),
-              this.where(table.query, table.where)
+              this.where(table.incrementalQuery || table.query, table.where)
             )
           )
         );
@@ -45,6 +45,9 @@ export class RedshiftAdapter extends Adapter implements IAdapter {
     } else {
       tasks.addAll(this.createOrReplace(table));
     }
+
+    this.postOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
     return tasks;
   }
 
@@ -59,26 +62,28 @@ export class RedshiftAdapter extends Adapter implements IAdapter {
         name: assertion.name
       });
     return Tasks.create()
-      .add(Task.statement(this.createOrReplaceView(target, assertion.query)))
+      .add(Task.statement(this.createOrReplaceView(target, assertion.query, true)))
       .add(Task.assertion(`select sum(1) as row_count from ${this.resolveTarget(target)}`));
   }
 
-  public createOrReplaceView(target: dataform.ITarget, query: string) {
-    return `
-      create or replace view ${this.resolveTarget(target)} as ${query}`;
+  public createOrReplaceView(target: dataform.ITarget, query: string, bind: boolean) {
+    const createQuery = `create or replace view ${this.resolveTarget(target)} as ${query}`;
+    if (bind) {
+      return createQuery;
+    }
+    return `${createQuery} with no schema binding`;
   }
 
   public createOrReplace(table: dataform.ITable) {
     if (table.type === "view") {
+      const isBindDefined = table.redshift && table.redshift.hasOwnProperty("bind");
+      const bindDefaultValue = semver.gte(this.dataformCoreVersion, "1.4.1") ? false : true;
+      const bind = isBindDefined ? table.redshift.bind : bindDefaultValue;
       return (
         Tasks.create()
           // Drop the view in case we are changing the number of column(s) (or their types).
           .add(Task.statement(this.dropIfExists(table.target, this.baseTableType(table.type))))
-          .add(
-            Task.statement(`
-        create or replace view ${this.resolveTarget(table.target)}
-        as ${table.query}`)
-          )
+          .add(Task.statement(this.createOrReplaceView(table.target, table.query, bind)))
       );
     }
     const tempTableTarget = dataform.Target.create({

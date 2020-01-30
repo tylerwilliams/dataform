@@ -2,6 +2,7 @@ import { Credentials } from "@dataform/api/commands/credentials";
 import { IDbAdapter } from "@dataform/api/dbadapters/index";
 import { dataform } from "@dataform/protos";
 import * as https from "https";
+import * as PromisePool from "promise-pool-executor";
 
 interface ISnowflake {
   createConnection: (options: {
@@ -21,6 +22,7 @@ interface ISnowflakeConnection {
     streamResult?: boolean;
     complete: (err: any, statement: ISnowflakeStatement, rows: any[]) => void;
   }) => void;
+  destroy: (err: any) => void;
 }
 
 interface ISnowflakeStatement {
@@ -36,9 +38,16 @@ const snowflake: ISnowflake = require("snowflake-sdk");
 
 export class SnowflakeDbAdapter implements IDbAdapter {
   private connectionPromise: Promise<ISnowflakeConnection>;
+  private pool: PromisePool.PromisePoolExecutor;
 
   constructor(credentials: Credentials) {
     this.connectionPromise = connect(credentials as dataform.ISnowflake);
+    // Unclear exactly what snowflakes limit's are here, we can experiment with increasing this.
+    this.pool = new PromisePool.PromisePoolExecutor({
+      concurrencyLimit: 10,
+      frequencyWindow: 1000,
+      frequencyLimit: 10
+    });
   }
 
   public async execute(
@@ -48,26 +57,36 @@ export class SnowflakeDbAdapter implements IDbAdapter {
     } = { maxResults: 1000 }
   ) {
     const connection = await this.connectionPromise;
-    return new Promise<any[]>((resolve, reject) => {
-      connection.execute({
-        sqlText: statement,
-        streamResult: true,
-        complete(err, stmt) {
-          if (err) {
-            reject(err);
-            return;
-          }
-          const rows: any[] = [];
-          const streamOptions =
-            !!options && !!options.maxResults ? { start: 0, end: options.maxResults - 1 } : {};
-          stmt
-            .streamRows(streamOptions)
-            .on("error", e => reject(e))
-            .on("data", row => rows.push(row))
-            .on("end", () => resolve(rows));
-        }
-      });
-    });
+    return {
+      rows: await this.pool
+        .addSingleTask({
+          generator: () =>
+            new Promise<any[]>((resolve, reject) => {
+              connection.execute({
+                sqlText: statement,
+                streamResult: true,
+                complete(err, stmt) {
+                  if (err) {
+                    reject(err);
+                    return;
+                  }
+                  const rows: any[] = [];
+                  const streamOptions =
+                    !!options && !!options.maxResults
+                      ? { start: 0, end: options.maxResults - 1 }
+                      : {};
+                  stmt
+                    .streamRows(streamOptions)
+                    .on("error", e => reject(e))
+                    .on("data", row => rows.push(row))
+                    .on("end", () => resolve(rows));
+                }
+              });
+            })
+        })
+        .promise(),
+      metadata: {}
+    };
   }
 
   public evaluate(statement: string): Promise<void> {
@@ -75,12 +94,13 @@ export class SnowflakeDbAdapter implements IDbAdapter {
   }
 
   public async tables(): Promise<dataform.ITarget[]> {
-    const rows = await this.execute(
+    const { rows } = await this.execute(
       `select table_name, table_schema
        from information_schema.tables
        where LOWER(table_schema) != 'information_schema'
          and LOWER(table_schema) != 'pg_catalog'
-         and LOWER(table_schema) != 'pg_internal'`
+         and LOWER(table_schema) != 'pg_internal'`,
+      { maxResults: 10000 }
     );
     return rows.map(row => ({
       schema: row.TABLE_SCHEMA,
@@ -89,7 +109,7 @@ export class SnowflakeDbAdapter implements IDbAdapter {
   }
 
   public async schemas(): Promise<string[]> {
-    const rows = await this.execute(`select SCHEMA_NAME from information_schema.schemata`);
+    const { rows } = await this.execute(`select SCHEMA_NAME from information_schema.schemata`);
     return rows.map(row => row.SCHEMA_NAME);
   }
 
@@ -104,25 +124,28 @@ export class SnowflakeDbAdapter implements IDbAdapter {
         `select table_type from information_schema.tables where table_schema = '${target.schema}' AND table_name = '${target.name}'`
       )
     ]).then(results => {
-      if (results[1].length > 0) {
+      if (results[1].rows.length > 0) {
         // The table exists.
         return {
           target,
-          type: results[1][0].TABLE_TYPE == "VIEW" ? "view" : "table",
-          fields: results[0].map(row => ({
+          type: results[1].rows[0].TABLE_TYPE == "VIEW" ? "view" : "table",
+          fields: results[0].rows.map(row => ({
             name: row.COLUMN_NAME,
             primitive: row.DATA_TYPE,
             flags: row.IS_NULLABLE && row.IS_NULLABLE == "YES" ? ["nullable"] : []
           }))
         };
       } else {
-        throw new Error(`Could not find relation: ${target.schema}.${target.name}`);
+        return null;
       }
     });
   }
 
   public async preview(target: dataform.ITarget, limitRows: number = 10): Promise<any[]> {
-    return this.execute(`SELECT * FROM "${target.schema}"."${target.name}" LIMIT ${limitRows}`);
+    const { rows } = await this.execute(
+      `SELECT * FROM "${target.schema}"."${target.name}" LIMIT ${limitRows}`
+    );
+    return rows;
   }
 
   public async prepareSchema(schema: string): Promise<void> {
@@ -130,6 +153,19 @@ export class SnowflakeDbAdapter implements IDbAdapter {
     if (!schemas.includes(schema)) {
       await this.execute(`create schema if not exists "${schema}"`);
     }
+  }
+
+  public async close() {
+    const connection = await this.connectionPromise;
+    await new Promise((resolve, reject) => {
+      connection.destroy((err: any) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
   }
 }
 

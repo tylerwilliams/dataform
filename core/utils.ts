@@ -1,14 +1,10 @@
+import { adapters } from "@dataform/core";
 import { Assertion } from "@dataform/core/assertion";
+import { Resolvable } from "@dataform/core/common";
 import { Declaration } from "@dataform/core/declaration";
 import { Operation } from "@dataform/core/operation";
-import { Resolvable } from "@dataform/core/session";
-import {
-  DistStyleTypes,
-  ignoredProps,
-  SortStyleTypes,
-  Table,
-  TableTypes
-} from "@dataform/core/table";
+import { IActionProto, Session } from "@dataform/core/session";
+import { DistStyleType, SortStyleType, Table, TableType } from "@dataform/core/table";
 import { dataform } from "@dataform/protos";
 
 const SQL_DATA_WAREHOUSE_DIST_HASH_REGEXP = new RegExp("HASH\\s*\\(\\s*\\w*\\s*\\)\\s*");
@@ -55,17 +51,20 @@ export function getCallerFile(rootDir: string) {
   let lastfile: string;
   const stack = getCurrentStack();
   while (stack.length) {
-    lastfile = stack.shift().getFileName();
-    if (!lastfile) {
+    const nextLastfile = stack.shift().getFileName();
+    if (!nextLastfile) {
       continue;
     }
-    if (!lastfile.includes(rootDir)) {
+    if (!nextLastfile.includes(rootDir)) {
       continue;
     }
-    if (lastfile.includes("node_modules")) {
+    if (nextLastfile.includes("node_modules")) {
       continue;
     }
-    if (!(lastfile.includes("definitions/") || lastfile.includes("models/"))) {
+    // If it's in the root directory we'll take it, but keep searching
+    // for a better match.
+    lastfile = nextLastfile;
+    if (!(nextLastfile.includes("definitions/") || nextLastfile.includes("models/"))) {
       continue;
     }
     break;
@@ -94,7 +93,7 @@ export function graphHasErrors(graph: dataform.ICompiledGraph) {
   );
 }
 
-function joinQuoted(values: string[]) {
+function joinQuoted(values: readonly string[]) {
   return values.map((value: string) => `"${value}"`).join(" | ");
 }
 
@@ -118,15 +117,9 @@ export function validate(compiledGraph: dataform.ICompiledGraph): dataform.IGrap
     const actionName = action.name;
 
     // type
-    if (!!action.type && !Object.values(TableTypes).includes(action.type)) {
-      const predefinedTypes = joinQuoted(Object.values(TableTypes));
+    if (!!action.type && !TableType.includes(action.type as TableType)) {
+      const predefinedTypes = joinQuoted(TableType);
       const message = `Wrong type of table detected. Should only use predefined types: ${predefinedTypes}`;
-      validationErrors.push(dataform.ValidationError.create({ message, actionName }));
-    }
-
-    // "where" property
-    if (action.type === TableTypes.INCREMENTAL && (!action.where || action.where.length === 0)) {
-      const message = `"where" property is not defined. With the type “incremental” you must also specify the property “where”!`;
       validationErrors.push(dataform.ValidationError.create({ message, actionName }));
     }
 
@@ -146,21 +139,21 @@ export function validate(compiledGraph: dataform.ICompiledGraph): dataform.IGrap
 
     // redshift config
     if (!!action.redshift) {
-      if (
-        Object.keys(action.redshift).length === 0 ||
-        Object.values(action.redshift).every((value: string) => !value.length)
-      ) {
-        const message = `Missing properties in redshift config`;
-        validationErrors.push(dataform.ValidationError.create({ message, actionName }));
-      }
-
       const validatePropertyDefined = (
         opts: dataform.IRedshiftOptions,
         prop: keyof dataform.IRedshiftOptions
       ) => {
-        if (!opts[prop] || !opts[prop].length) {
-          const message = `Property "${prop}" is not defined`;
-          validationErrors.push(dataform.ValidationError.create({ message, actionName }));
+        const error = dataform.ValidationError.create({
+          message: `Property "${prop}" is not defined`,
+          actionName
+        });
+        const value = opts[prop];
+        if (!opts.hasOwnProperty(prop)) {
+          validationErrors.push(error);
+        } else if (value instanceof Array) {
+          if (value.length === 0) {
+            validationErrors.push(error);
+          }
         }
       };
       const validatePropertiesDefined = (
@@ -170,7 +163,7 @@ export function validate(compiledGraph: dataform.ICompiledGraph): dataform.IGrap
       const validatePropertyValueInValues = (
         opts: dataform.IRedshiftOptions,
         prop: keyof dataform.IRedshiftOptions & ("distStyle" | "sortStyle"),
-        values: string[]
+        values: readonly string[]
       ) => {
         if (!!opts[prop] && !values.includes(opts[prop])) {
           const message = `Wrong value of "${prop}" property. Should only use predefined values: ${joinQuoted(
@@ -182,20 +175,31 @@ export function validate(compiledGraph: dataform.ICompiledGraph): dataform.IGrap
 
       if (action.redshift.distStyle || action.redshift.distKey) {
         validatePropertiesDefined(action.redshift, ["distStyle", "distKey"]);
-        validatePropertyValueInValues(action.redshift, "distStyle", Object.values(DistStyleTypes));
+        validatePropertyValueInValues(action.redshift, "distStyle", DistStyleType);
       }
       if (
         action.redshift.sortStyle ||
         (action.redshift.sortKeys && action.redshift.sortKeys.length)
       ) {
         validatePropertiesDefined(action.redshift, ["sortStyle", "sortKeys"]);
-        validatePropertyValueInValues(action.redshift, "sortStyle", Object.values(SortStyleTypes));
+        validatePropertyValueInValues(action.redshift, "sortStyle", SortStyleType);
+      }
+    }
+
+    // BigQuery config
+    if (!!action.bigquery) {
+      if (action.bigquery.partitionBy && action.type === "view") {
+        const error = dataform.ValidationError.create({
+          message: `partitionBy is not valid for BigQuery views; it is only valid for tables`,
+          actionName
+        });
+        validationErrors.push(error);
       }
     }
 
     // ignored properties in tables
-    if (!!ignoredProps[action.type]) {
-      ignoredProps[action.type].forEach(ignoredProp => {
+    if (!!Table.IGNORED_PROPS[action.type]) {
+      Table.IGNORED_PROPS[action.type].forEach(ignoredProp => {
         if (objectExistsOrIsNonEmpty(action[ignoredProp])) {
           const message = `Unused property was detected: "${ignoredProp}". This property is not used for tables with type "${action.type}" and will be ignored.`;
           validationErrors.push(dataform.ValidationError.create({ message, actionName }));
@@ -218,12 +222,44 @@ export function flatten<T>(nestedArray: T[][]) {
   }, []);
 }
 
-export function isResolvable(res: any) {
-  return typeof res === "string" || (!!res.schema && !!res.name);
+const invalidRefInputMessage =
+  "Invalid input. Accepted inputs include: a single object containing " +
+  "an (optional) 'database', (optional) 'schema', and 'name', " +
+  "or 1-3 inputs consisting of an (optional) database, (optional) schema, and 'name'.";
+
+export function toResolvable(ref: Resolvable | string[], rest: string[]): Resolvable {
+  if (Array.isArray(ref) && rest.length > 0) {
+    throw new Error(invalidRefInputMessage);
+  }
+  if (rest.length === 0 && !Array.isArray(ref)) {
+    return ref;
+  }
+  const resolvableArray = Array.isArray(ref) ? ref.reverse() : [ref, ...rest].reverse();
+  if (!isResolvableArray(resolvableArray)) {
+    throw new Error(invalidRefInputMessage);
+  }
+  const [name, schema, database] = resolvableArray;
+  return { database, schema, name };
+}
+
+function isResolvableArray(parts: any[]): parts is [string, string?, string?] {
+  if (parts.some(part => typeof part !== "string")) {
+    return false;
+  }
+  return parts.length > 0 && parts.length <= 3;
+}
+
+export function resolvableAsTarget(resolvable: Resolvable): dataform.ITarget {
+  if (typeof resolvable === "string") {
+    return {
+      name: resolvable
+    };
+  }
+  return resolvable;
 }
 
 export function stringifyResolvable(res: Resolvable) {
-  return typeof res === "string" ? res : `${res.schema}.${res.name}`;
+  return typeof res === "string" ? res : JSON.stringify(res);
 }
 
 export function ambiguousActionNameMsg(
@@ -239,4 +275,37 @@ export function ambiguousActionNameMsg(
   return `Ambiguous Action name: ${stringifyResolvable(
     act
   )}. Did you mean one of: ${allActNames.join(", ")}.`;
+}
+
+export function target(
+  adapter: adapters.IAdapter,
+  name: string,
+  schema: string,
+  database?: string
+): dataform.ITarget {
+  return dataform.Target.create({
+    name: adapter.normalizeIdentifier(name),
+    schema: adapter.normalizeIdentifier(schema),
+    database: database && adapter.normalizeIdentifier(database)
+  });
+}
+
+export function setNameAndTarget(
+  session: Session,
+  action: IActionProto,
+  name: string,
+  overrideSchema?: string,
+  overrideDatabase?: string
+) {
+  action.target = target(
+    session.adapter(),
+    name,
+    overrideSchema || session.config.defaultSchema,
+    overrideDatabase || session.config.defaultDatabase
+  );
+  const nameParts = [action.target.name, action.target.schema];
+  if (!!action.target.database) {
+    nameParts.push(action.target.database);
+  }
+  action.name = nameParts.reverse().join(".");
 }

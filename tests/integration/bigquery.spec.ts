@@ -3,21 +3,25 @@ import * as dbadapters from "@dataform/api/dbadapters";
 import * as adapters from "@dataform/core/adapters";
 import { dataform } from "@dataform/protos";
 import { expect } from "chai";
+import { BigQueryAdapter } from "df/core/adapters/bigquery";
+import { suite, test } from "df/testing";
 import { dropAllTables, getTableRows, keyBy } from "df/tests/integration/utils";
+import * as Long from "long";
 
-describe("@dataform/integration/bigquery", () => {
-  const credentials = dfapi.credentials.read("bigquery", "df/test_credentials/bigquery.json");
+suite("@dataform/integration/bigquery", ({ after }) => {
+  const credentials = dfapi.credentials.read("bigquery", "test_credentials/bigquery.json");
   const dbadapter = dbadapters.create(credentials, "bigquery");
+  after("close adapter", () => dbadapter.close());
 
-  it("run", async () => {
+  test("run", { timeout: 60000 }, async () => {
     const compiledGraph = await dfapi.compile({
-      projectDir: "df/tests/integration/bigquery_project"
+      projectDir: "tests/integration/bigquery_project"
     });
 
     expect(compiledGraph.graphErrors.compilationErrors).to.eql([]);
     expect(compiledGraph.graphErrors.validationErrors).to.eql([]);
 
-    const adapter = adapters.create(compiledGraph.projectConfig);
+    const adapter = adapters.create(compiledGraph.projectConfig, compiledGraph.dataformCoreVersion);
 
     // Drop all the tables before we do anything.
     await dropAllTables(compiledGraph, adapter, dbadapter);
@@ -58,39 +62,48 @@ describe("@dataform/integration/bigquery", () => {
 
     const actionMap = keyBy(executedGraph.actions, v => v.name);
 
-    // Check the status of the two assertions.
-    expect(actionMap["df_integration_test_assertions.example_assertion_fail"].status).equals(
-      dataform.ActionResult.ExecutionStatus.FAILED
-    );
-    expect(actionMap["df_integration_test_assertions.example_assertion_pass"].status).equals(
-      dataform.ActionResult.ExecutionStatus.SUCCESSFUL
+    // Check the status of file execution.
+    const expectedRunStatuses = {
+      successful: [
+        "dataform-integration-tests.df_integration_test_assertions.example_assertion_pass",
+        "dataform-integration-tests.df_integration_test_assertions.example_assertion_uniqueness_pass",
+        "dataform-integration-tests.df_integration_test.example_incremental",
+        "dataform-integration-tests.df_integration_test.example_table",
+        "dataform-integration-tests.df_integration_test.example_view",
+        "dataform-integration-tests.df_integration_test.sample_data_2",
+        "dataform-integration-tests.df_integration_test.sample_data"
+      ],
+      failed: [
+        "dataform-integration-tests.df_integration_test_assertions.example_assertion_uniqueness_fail",
+        "dataform-integration-tests.df_integration_test_assertions.example_assertion_fail"
+      ]
+    };
+
+    expectedRunStatuses.successful.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL)
     );
 
-    // Check the status of the two uniqueness assertions.
+    expectedRunStatuses.failed.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.FAILED)
+    );
+
     expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_fail"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.FAILED);
-    expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_fail"].tasks[1]
-        .errorMessage
-    ).to.eql("Assertion failed: query returned 1 row(s).");
-    expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_pass"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL);
+      actionMap[
+        "dataform-integration-tests.df_integration_test_assertions.example_assertion_uniqueness_fail"
+      ].tasks[1].errorMessage
+    ).to.eql("bigquery error: Assertion failed: query returned 1 row(s).");
 
     // Check the data in the incremental table.
     let incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
-      "df_integration_test.example_incremental"
+      "dataform-integration-tests.df_integration_test.example_incremental"
     ];
-
     let incrementalRows = await getTableRows(
       incrementalTable.target,
       adapter,
       credentials,
       "bigquery"
     );
-
-    expect(incrementalRows.length).equals(1);
+    expect(incrementalRows.length).equals(3);
 
     // Re-run some of the actions.
     executionGraph = await dfapi.build(
@@ -104,15 +117,15 @@ describe("@dataform/integration/bigquery", () => {
     executedGraph = await dfapi.run(executionGraph, credentials).resultPromise();
     expect(executedGraph.status).equals(dataform.RunResult.ExecutionStatus.SUCCESSFUL);
 
-    // Check there is an extra row in the incremental table.
+    // Check there are the expected number of extra rows in the incremental table.
     incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
-      "df_integration_test.example_incremental"
+      "dataform-integration-tests.df_integration_test.example_incremental"
     ];
     incrementalRows = await getTableRows(incrementalTable.target, adapter, credentials, "bigquery");
-    expect(incrementalRows.length).equals(2);
-  }).timeout(60000);
+    expect(incrementalRows.length).equals(5);
+  });
 
-  describe("result limit works", async () => {
+  suite("result limit works", async () => {
     const query = `
       select 1 union all
       select 2 union all
@@ -121,8 +134,9 @@ describe("@dataform/integration/bigquery", () => {
       select 5`;
 
     for (const interactive of [true, false]) {
-      it(`with interactive=${interactive}`, async () => {
-        expect(await dbadapter.execute(query, { interactive, maxResults: 2 })).eql([
+      test(`with interactive=${interactive}`, async () => {
+        const { rows } = await dbadapter.execute(query, { interactive, maxResults: 2 });
+        expect(rows).to.eql([
           {
             f0_: 1
           },
@@ -132,5 +146,53 @@ describe("@dataform/integration/bigquery", () => {
         ]);
       });
     }
+  });
+
+  suite("publish tasks", async () => {
+    test("incremental pre and post ops, core version <= 1.4.8", async () => {
+      // 1.4.8 used `preOps` and `postOps` instead of `incrementalPreOps` and `incrementalPostOps`.
+      const table: dataform.ITable = {
+        type: "incremental",
+        query: "query",
+        preOps: ["preop task1", "preop task2"],
+        incrementalQuery: "",
+        postOps: ["postop task1", "postop task2"],
+        target: { schema: "", name: "", database: "" }
+      };
+
+      const bqadapter = new BigQueryAdapter({ warehouse: "bigquery" }, "1.4.8");
+
+      const refresh = bqadapter.publishTasks(table, { fullRefresh: true }, { fields: [] }).build();
+
+      expect(refresh[0].statement).to.equal(table.preOps[0]);
+      expect(refresh[1].statement).to.equal(table.preOps[1]);
+      expect(refresh[refresh.length - 2].statement).to.equal(table.postOps[0]);
+      expect(refresh[refresh.length - 1].statement).to.equal(table.postOps[1]);
+
+      const increment = bqadapter
+        .publishTasks(table, { fullRefresh: false }, { fields: [] })
+        .build();
+
+      expect(increment[0].statement).to.equal(table.preOps[0]);
+      expect(increment[1].statement).to.equal(table.preOps[1]);
+      expect(increment[increment.length - 2].statement).to.equal(table.postOps[0]);
+      expect(increment[increment.length - 1].statement).to.equal(table.postOps[1]);
+    });
+  });
+
+  suite("metadata", async () => {
+    test("includes jobReference and statistics", async () => {
+      const query = `select 1 as test`;
+      const { metadata } = await dbadapter.execute(query);
+      const { bigquery: bqMetadata } = metadata;
+      expect(bqMetadata).to.have.property("jobId");
+      expect(bqMetadata.jobId).to.match(
+        /^dataform-[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}$/
+      );
+      expect(bqMetadata).to.have.property("totalBytesBilled");
+      expect(bqMetadata.totalBytesBilled).to.eql(Long.fromNumber(0));
+      expect(bqMetadata).to.have.property("totalBytesProcessed");
+      expect(bqMetadata.totalBytesProcessed).to.eql(Long.fromNumber(0));
+    });
   });
 });

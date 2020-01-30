@@ -1,20 +1,16 @@
+import { IAdapter } from "@dataform/core/adapters";
+import { Adapter } from "@dataform/core/adapters/base";
+import { Task, Tasks } from "@dataform/core/tasks";
 import { dataform } from "@dataform/protos";
-import { Task, Tasks } from "../tasks";
-import { Adapter } from "./base";
-import { IAdapter } from "./index";
 
 export class BigQueryAdapter extends Adapter implements IAdapter {
-  private project: dataform.IProjectConfig;
-
-  constructor(project: dataform.IProjectConfig) {
-    super();
-    this.project = project;
+  constructor(private readonly project: dataform.IProjectConfig, dataformCoreVersion: string) {
+    super(dataformCoreVersion);
   }
 
   public resolveTarget(target: dataform.ITarget) {
-    return `\`${
-      this.project.gcloudProjectId ? `${this.project.gcloudProjectId}.` : ""
-    }${target.schema || this.project.defaultSchema}.${target.name}\``;
+    return `\`${target.database || this.project.defaultDatabase}.${target.schema ||
+      this.project.defaultSchema}.${target.name}\``;
   }
 
   public publishTasks(
@@ -23,14 +19,17 @@ export class BigQueryAdapter extends Adapter implements IAdapter {
     tableMetadata: dataform.ITableMetadata
   ): Tasks {
     const tasks = Tasks.create();
-    // Drop views/tables first if they exist.
-    if (tableMetadata && tableMetadata.type != this.baseTableType(table.type)) {
+
+    this.preOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
+    if (tableMetadata && tableMetadata.type !== this.baseTableType(table.type)) {
       tasks.add(
         Task.statement(this.dropIfExists(table.target, this.oppositeTableType(table.type)))
       );
     }
-    if (table.type == "incremental") {
-      if (runConfig.fullRefresh || !tableMetadata || tableMetadata.type == "view") {
+
+    if (table.type === "incremental") {
+      if (!this.shouldWriteIncrementally(runConfig, tableMetadata)) {
         tasks.add(Task.statement(this.createOrReplace(table)));
       } else {
         tasks.add(
@@ -38,7 +37,7 @@ export class BigQueryAdapter extends Adapter implements IAdapter {
             this.insertInto(
               table.target,
               tableMetadata.fields.map(f => f.name),
-              this.where(table.query, table.where)
+              this.where(table.incrementalQuery || table.query, table.where)
             )
           )
         );
@@ -46,6 +45,9 @@ export class BigQueryAdapter extends Adapter implements IAdapter {
     } else {
       tasks.add(Task.statement(this.createOrReplace(table)));
     }
+
+    this.postOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
     return tasks;
   }
 
@@ -63,16 +65,6 @@ export class BigQueryAdapter extends Adapter implements IAdapter {
     tasks.add(Task.statement(this.createOrReplaceView(target, assertion.query)));
     tasks.add(Task.assertion(`select sum(1) as row_count from ${this.resolveTarget(target)}`));
     return tasks;
-  }
-
-  public createEmptyIfNotExists(table: dataform.ITable) {
-    return `create ${this.baseTableType(table.type)} if not exists ${this.resolveTarget(
-      table.target
-    )} ${
-      table.bigquery && table.bigquery.partitionBy
-        ? `partition by ${table.bigquery.partitionBy}`
-        : ""
-    } as ${this.where(table.query, "false")}`;
   }
 
   public createOrReplace(table: dataform.ITable) {

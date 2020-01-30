@@ -1,5 +1,6 @@
 import { Credentials } from "@dataform/api/commands/credentials";
 import * as dbadapters from "@dataform/api/dbadapters";
+import { retry } from "@dataform/api/utils/retry";
 import { dataform } from "@dataform/protos";
 import * as EventEmitter from "events";
 import * as Long from "long";
@@ -11,11 +12,16 @@ const isSuccessfulAction = (actionResult: dataform.IActionResult) =>
   actionResult.status === dataform.ActionResult.ExecutionStatus.DISABLED;
 
 export function run(graph: dataform.IExecutionGraph, credentials: Credentials): Runner {
-  const runner = Runner.create(
-    dbadapters.create(credentials, graph.projectConfig.warehouse),
-    graph
-  );
-  runner.execute();
+  const dbadapter = dbadapters.create(credentials, graph.projectConfig.warehouse);
+  const runner = Runner.create(dbadapter, graph);
+  const executeAndCloseDbAdapter = async () => {
+    try {
+      await runner.execute();
+    } finally {
+      await dbadapter.close();
+    }
+  };
+  executeAndCloseDbAdapter();
   return runner;
 }
 
@@ -29,10 +35,12 @@ export class Runner {
   private pendingActions: dataform.IExecutionAction[];
 
   private cancelled = false;
+  private timedOut = false;
   private runResult: dataform.IRunResult;
 
   private changeListeners: Array<(graph: dataform.IRunResult) => void> = [];
 
+  private timeout: NodeJS.Timer;
   private executionTask: Promise<dataform.IRunResult>;
 
   private eEmitter: EventEmitter;
@@ -59,6 +67,12 @@ export class Runner {
       throw new Error("Executor already started.");
     }
     this.executionTask = this.executeGraph();
+    if (!!this.graph.runConfig && !!this.graph.runConfig.timeoutMillis) {
+      this.timeout = setTimeout(() => {
+        this.timedOut = true;
+        this.cancel();
+      }, this.graph.runConfig.timeoutMillis);
+    }
     return this.resultPromise();
   }
 
@@ -68,7 +82,13 @@ export class Runner {
   }
 
   public async resultPromise(): Promise<dataform.IRunResult> {
-    return this.executionTask;
+    try {
+      return await this.executionTask;
+    } finally {
+      if (!!this.timeout) {
+        clearTimeout(this.timeout);
+      }
+    }
   }
 
   private triggerChange() {
@@ -99,17 +119,14 @@ export class Runner {
     this.runResult.timing = timer.end();
 
     this.runResult.status = dataform.RunResult.ExecutionStatus.SUCCESSFUL;
-    if (
-      this.runResult.actions.filter(
-        action => action.status === dataform.ActionResult.ExecutionStatus.CANCELLED
-      ).length > 0
-    ) {
+    if (this.timedOut) {
+      this.runResult.status = dataform.RunResult.ExecutionStatus.TIMED_OUT;
+    } else if (this.cancelled) {
       this.runResult.status = dataform.RunResult.ExecutionStatus.CANCELLED;
-    }
-    if (
-      this.runResult.actions.filter(
+    } else if (
+      this.runResult.actions.some(
         action => action.status === dataform.ActionResult.ExecutionStatus.FAILED
-      ).length > 0
+      )
     ) {
       this.runResult.status = dataform.RunResult.ExecutionStatus.FAILED;
     }
@@ -242,15 +259,22 @@ export class Runner {
     const timer = Timer.start();
     const taskResult: dataform.ITaskResult = {
       status: dataform.TaskResult.ExecutionStatus.RUNNING,
-      timing: timer.current()
+      timing: timer.current(),
+      metadata: {}
     };
     parentAction.tasks.push(taskResult);
     await this.triggerChange();
     try {
-      const rows = await this.adapter.execute(task.statement, {
-        onCancel: handleCancel => this.eEmitter.on(CANCEL_EVENT, handleCancel),
-        maxResults: 1
-      });
+      // Retry this function a given number of times, configurable by user
+      const { rows, metadata } = await retry(
+        () =>
+          this.adapter.execute(task.statement, {
+            onCancel: handleCancel => this.eEmitter.on(CANCEL_EVENT, handleCancel),
+            maxResults: 1
+          }),
+        task.type === "operation" ? 0 : this.graph.projectConfig.idempotentActionRetries || 0
+      );
+      taskResult.metadata = metadata;
       if (task.type === "assertion") {
         // We expect that an assertion query returns 1 row, with 1 field that is the row count.
         // We don't really care what that field/column is called.
@@ -264,7 +288,7 @@ export class Runner {
       taskResult.status = this.cancelled
         ? dataform.TaskResult.ExecutionStatus.CANCELLED
         : dataform.TaskResult.ExecutionStatus.FAILED;
-      taskResult.errorMessage = e.message;
+      taskResult.errorMessage = `${this.graph.projectConfig.warehouse} error: ${e.message}`;
     }
     taskResult.timing = timer.end();
     await this.triggerChange();

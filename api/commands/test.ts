@@ -8,7 +8,11 @@ export async function test(
   tests: dataform.ITest[]
 ): Promise<dataform.ITestResult[]> {
   const dbadapter = dbadapters.create(credentials, warehouse);
-  return await Promise.all(tests.map(testCase => runTest(dbadapter, testCase)));
+  try {
+    return await Promise.all(tests.map(testCase => runTest(dbadapter, testCase)));
+  } finally {
+    await dbadapter.close();
+  }
 }
 
 async function runTest(
@@ -23,16 +27,18 @@ async function runTest(
   ]);
 
   // Check row counts.
-  if (actualResults.length !== expectedResults.length) {
+  if (actualResults.rows.length !== expectedResults.rows.length) {
     return {
       name: testCase.name,
       successful: false,
-      messages: [`Expected ${expectedResults.length} rows, but saw ${actualResults.length} rows.`]
+      messages: [
+        `Expected ${expectedResults.rows.length} rows, but saw ${actualResults.rows.length} rows.`
+      ]
     };
   }
   // If the result set is empty and the number of actual rows is equal to the number of expected rows
   // (asserted above), this test is therefore successful.
-  if (actualResults.length === 0) {
+  if (actualResults.rows.length === 0) {
     return {
       name: testCase.name,
       successful: true
@@ -40,8 +46,8 @@ async function runTest(
   }
 
   // Check column sets.
-  const actualColumns = Object.keys(actualResults[0]);
-  const expectedColumns = Object.keys(expectedResults[0]);
+  const actualColumns = Object.keys(actualResults.rows[0]);
+  const expectedColumns = Object.keys(expectedResults.rows[0]);
   if (actualColumns.length !== expectedColumns.length) {
     return {
       name: testCase.name,
@@ -66,9 +72,9 @@ async function runTest(
 
   // Check row contents.
   const rowMessages: string[] = [];
-  for (let i = 0; i < actualResults.length; i++) {
-    const actualResultRow = normalizeRow(actualResults[i]);
-    const expectedResultRow = normalizeRow(expectedResults[i]);
+  for (let i = 0; i < actualResults.rows.length; i++) {
+    const actualResultRow = normalizeRow(actualResults.rows[i]);
+    const expectedResultRow = normalizeRow(expectedResults.rows[i]);
 
     for (const column of actualColumns) {
       const normalizedColumn = normalizeColumnName(column);

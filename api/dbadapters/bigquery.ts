@@ -3,6 +3,7 @@ import { IDbAdapter, OnCancel } from "@dataform/api/dbadapters/index";
 import { dataform } from "@dataform/protos";
 import { BigQuery } from "@google-cloud/bigquery";
 import { QueryResultsOptions } from "@google-cloud/bigquery/build/src/job";
+import * as Long from "long";
 import * as PromisePool from "promise-pool-executor";
 
 const BIGQUERY_DATE_RELATED_FIELDS = [
@@ -109,6 +110,11 @@ export class BigQueryDbAdapter implements IDbAdapter {
 
   public async table(target: dataform.ITarget): Promise<dataform.ITableMetadata> {
     const metadata = await this.getMetadata(target);
+
+    if (!metadata) {
+      return null;
+    }
+
     return dataform.TableMetadata.create({
       type: String(metadata.type).toLowerCase(),
       target,
@@ -134,10 +140,11 @@ export class BigQueryDbAdapter implements IDbAdapter {
         .promise();
       return cleanRows(rowsResult[0]);
     }
-    return this.runQuery(
+    const { rows } = await this.runQuery(
       `SELECT * FROM \`${metadata.tableReference.projectId}.${metadata.tableReference.datasetId}.${metadata.tableReference.tableId}\``,
       limitRows
     );
+    return rows;
   }
 
   public async prepareSchema(schema: string): Promise<void> {
@@ -160,6 +167,8 @@ export class BigQueryDbAdapter implements IDbAdapter {
     }
   }
 
+  public async close() {}
+
   private async runQuery(statement: string, maxResults?: number) {
     const results = await new Promise<any[]>((resolve, reject) => {
       const allRows: any[] = [];
@@ -179,7 +188,7 @@ export class BigQueryDbAdapter implements IDbAdapter {
           resolve(allRows);
         });
     });
-    return cleanRows(results);
+    return { rows: cleanRows(results), metadata: {} };
   }
 
   private createQueryJob(statement: string, maxResults?: number, onCancel?: OnCancel) {
@@ -190,7 +199,7 @@ export class BigQueryDbAdapter implements IDbAdapter {
       });
     }
 
-    return new Promise<any[]>((resolve, reject) =>
+    return new Promise<any>((resolve, reject) =>
       this.client.createQueryJob(
         { useLegacySql: false, jobPrefix: "dataform-", query: statement, maxResults },
         async (err, job) => {
@@ -225,7 +234,21 @@ export class BigQueryDbAdapter implements IDbAdapter {
               // More results exist and we have space to consume them.
               job.getQueryResults(nextQuery, manualPaginationCallback);
             } else {
-              resolve(results);
+              job.getMetadata().then(([bqMeta]) => {
+                const queryData = {
+                  rows: results,
+                  metadata: {
+                    bigquery: {
+                      jobId: bqMeta.jobReference.jobId,
+                      totalBytesBilled: Long.fromString(bqMeta.statistics.query.totalBytesBilled),
+                      totalBytesProcessed: Long.fromString(
+                        bqMeta.statistics.query.totalBytesProcessed
+                      )
+                    }
+                  }
+                };
+                resolve(queryData);
+              });
             }
           };
           // For non interactive queries, we can set a hard limit by disabling auto pagination.
@@ -239,14 +262,25 @@ export class BigQueryDbAdapter implements IDbAdapter {
   private async getMetadata(target: dataform.ITarget): Promise<IBigQueryTableMetadata> {
     const metadataResult = await this.pool
       .addSingleTask({
-        generator: () =>
-          this.client
-            .dataset(target.schema)
-            .table(target.name)
-            .getMetadata()
+        generator: async () => {
+          try {
+            const table = await this.client
+              .dataset(target.schema)
+              .table(target.name)
+              .getMetadata();
+            return table;
+          } catch (e) {
+            if (e && e.errors && e.errors[0] && e.errors[0].reason === "notFound") {
+              // if the table can't be found, just return null
+              return null;
+            }
+            // otherwise throw the error as normal
+            throw e;
+          }
+        }
       })
       .promise();
-    return metadataResult[0];
+    return metadataResult && metadataResult[0];
   }
 }
 

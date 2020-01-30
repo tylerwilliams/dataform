@@ -3,21 +3,24 @@ import * as dbadapters from "@dataform/api/dbadapters";
 import * as adapters from "@dataform/core/adapters";
 import { dataform } from "@dataform/protos";
 import { expect } from "chai";
+import { RedshiftAdapter } from "df/core/adapters/redshift";
+import { suite, test } from "df/testing";
 import { getTableRows, keyBy } from "df/tests/integration/utils";
 
-describe("@dataform/integration/redshift", () => {
-  const credentials = dfapi.credentials.read("redshift", "df/test_credentials/redshift.json");
+suite("@dataform/integration/redshift", ({ after }) => {
+  const credentials = dfapi.credentials.read("redshift", "test_credentials/redshift.json");
   const dbadapter = dbadapters.create(credentials, "redshift");
+  after("close adapter", () => dbadapter.close());
 
-  it("run", async () => {
+  test("run", { timeout: 60000 }, async () => {
     const compiledGraph = await dfapi.compile({
-      projectDir: "df/tests/integration/redshift_project"
+      projectDir: "tests/integration/redshift_project"
     });
 
     expect(compiledGraph.graphErrors.compilationErrors).to.eql([]);
     expect(compiledGraph.graphErrors.validationErrors).to.eql([]);
 
-    const adapter = adapters.create(compiledGraph.projectConfig);
+    const adapter = adapters.create(compiledGraph.projectConfig, compiledGraph.dataformCoreVersion);
 
     // Redshift transactions are giving us headaches here. Drop tables sequentially.
     const dropFunctions = [].concat(
@@ -66,6 +69,37 @@ describe("@dataform/integration/redshift", () => {
 
     const actionMap = keyBy(executedGraph.actions, v => v.name);
 
+    // Check the status of file execution.
+    const expectedRunStatuses = {
+      successful: [
+        "df_integration_test_assertions.example_assertion_pass",
+        "df_integration_test_assertions.example_assertion_uniqueness_pass",
+        "df_integration_test.example_incremental",
+        "df_integration_test.example_table",
+        "df_integration_test.example_view",
+        "df_integration_test.load_from_s3",
+        "df_integration_test.sample_data_2",
+        "df_integration_test.sample_data"
+      ],
+      failed: [
+        "df_integration_test_assertions.example_assertion_uniqueness_fail",
+        "df_integration_test_assertions.example_assertion_fail"
+      ]
+    };
+
+    expectedRunStatuses.successful.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL)
+    );
+
+    expectedRunStatuses.failed.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.FAILED)
+    );
+
+    expect(
+      actionMap["df_integration_test_assertions.example_assertion_uniqueness_fail"].tasks[1]
+        .errorMessage
+    ).to.eql("redshift error: Assertion failed: query returned 1 row(s).");
+
     // Check the status of the s3 load operation.
     expect(actionMap["df_integration_test.load_from_s3"].status).equals(
       dataform.ActionResult.ExecutionStatus.SUCCESSFUL
@@ -79,26 +113,6 @@ describe("@dataform/integration/redshift", () => {
     const s3Rows = await getTableRows(s3Table.target, adapter, credentials, "redshift");
     expect(s3Rows.length).equals(2);
 
-    // Check the status of the two assertions.
-    expect(actionMap["df_integration_test_assertions.example_assertion_fail"].status).equals(
-      dataform.ActionResult.ExecutionStatus.FAILED
-    );
-    expect(actionMap["df_integration_test_assertions.example_assertion_pass"].status).equals(
-      dataform.ActionResult.ExecutionStatus.SUCCESSFUL
-    );
-
-    // Check the status of the two uniqueness assertions.
-    expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_fail"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.FAILED);
-    expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_fail"].tasks[1]
-        .errorMessage
-    ).to.eql("Assertion failed: query returned 1 row(s).");
-    expect(
-      actionMap["df_integration_test_assertions.example_assertion_uniqueness_pass"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL);
-
     // Check the data in the incremental table.
     let incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
       "df_integration_test.example_incremental"
@@ -109,7 +123,7 @@ describe("@dataform/integration/redshift", () => {
       credentials,
       "redshift"
     );
-    expect(incrementalRows.length).equals(1);
+    expect(incrementalRows.length).equals(3);
 
     // Re-run some of the actions.
     executionGraph = await dfapi.build(
@@ -122,15 +136,15 @@ describe("@dataform/integration/redshift", () => {
     executedGraph = await dfapi.run(executionGraph, credentials).resultPromise();
     expect(executedGraph.status).equals(dataform.RunResult.ExecutionStatus.SUCCESSFUL);
 
-    // Check there is an extra row in the incremental table.
+    // Check there are the expected number of extra rows in the incremental table.
     incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
       "df_integration_test.example_incremental"
     ];
     incrementalRows = await getTableRows(incrementalTable.target, adapter, credentials, "redshift");
-    expect(incrementalRows.length).equals(2);
-  }).timeout(60000);
+    expect(incrementalRows.length).equals(5);
+  });
 
-  describe("result limit works", async () => {
+  suite("result limit works", async () => {
     const query = `
       select 1 union all
       select 2 union all
@@ -139,8 +153,9 @@ describe("@dataform/integration/redshift", () => {
       select 5`;
 
     for (const interactive of [true, false]) {
-      it(`with interactive=${interactive}`, async () => {
-        expect(await dbadapter.execute(query, { interactive, maxResults: 2 })).eql([
+      test(`with interactive=${interactive}`, async () => {
+        const { rows } = await dbadapter.execute(query, { interactive, maxResults: 2 });
+        expect(rows).eql([
           {
             "?column?": 1
           },
@@ -150,5 +165,37 @@ describe("@dataform/integration/redshift", () => {
         ]);
       });
     }
+  });
+
+  suite("publish tasks", async () => {
+    test("incremental pre and post ops, core version <= 1.4.8", async () => {
+      // 1.4.8 used `preOps` and `postOps` instead of `incrementalPreOps` and `incrementalPostOps`.
+      const table: dataform.ITable = {
+        type: "incremental",
+        query: "query",
+        preOps: ["preop task1", "preop task2"],
+        incrementalQuery: "",
+        postOps: ["postop task1", "postop task2"],
+        target: { schema: "", name: "", database: "" }
+      };
+
+      const bqadapter = new RedshiftAdapter({ warehouse: "redshift" }, "1.4.8");
+
+      const refresh = bqadapter.publishTasks(table, { fullRefresh: true }, { fields: [] }).build();
+
+      expect(refresh[0].statement).to.equal(table.preOps[0]);
+      expect(refresh[1].statement).to.equal(table.preOps[1]);
+      expect(refresh[refresh.length - 2].statement).to.equal(table.postOps[0]);
+      expect(refresh[refresh.length - 1].statement).to.equal(table.postOps[1]);
+
+      const increment = bqadapter
+        .publishTasks(table, { fullRefresh: false }, { fields: [] })
+        .build();
+
+      expect(increment[0].statement).to.equal(table.preOps[0]);
+      expect(increment[1].statement).to.equal(table.preOps[1]);
+      expect(increment[increment.length - 2].statement).to.equal(table.postOps[0]);
+      expect(increment[increment.length - 1].statement).to.equal(table.postOps[1]);
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { Credentials } from "@dataform/api/commands/credentials";
-import { IDbAdapter, OnCancel } from "@dataform/api/dbadapters/index";
+import { IDbAdapter, IExecutionResult, OnCancel } from "@dataform/api/dbadapters/index";
 import { dataform } from "@dataform/protos";
 import { ConnectionPool } from "mssql";
 
@@ -44,13 +44,13 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
       onCancel?: OnCancel;
       maxResults?: number;
     } = { maxResults: 1000 }
-  ): Promise<any[]> {
+  ): Promise<IExecutionResult> {
     const request = (await this.pool).request();
     if (options && options.onCancel) {
       options.onCancel(() => request.cancel());
     }
 
-    return await new Promise<any[]>((resolve, reject) => {
+    return await new Promise<IExecutionResult>((resolve, reject) => {
       request.stream = true;
 
       const rows: any[] = [];
@@ -59,13 +59,13 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
         .on("row", row => {
           if (options && options.maxResults && rows.length >= options.maxResults) {
             request.cancel();
-            resolve(rows);
+            resolve({ rows, metadata: {} });
             return;
           }
           rows.push(row);
         })
         .on("error", err => reject(err))
-        .on("done", () => resolve(rows));
+        .on("done", () => resolve({ rows, metadata: {} }));
 
       // tslint:disable-next-line: no-floating-promises
       request.query(statement);
@@ -77,10 +77,11 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
   }
 
   public async tables(): Promise<dataform.ITarget[]> {
-    const result = await this.execute(
-      `select ${TABLE_SCHEMA_COL_NAME}, ${TABLE_NAME_COL_NAME} from ${INFORMATION_SCHEMA_SCHEMA_NAME}.tables`
+    const { rows } = await this.execute(
+      `select ${TABLE_SCHEMA_COL_NAME}, ${TABLE_NAME_COL_NAME} from ${INFORMATION_SCHEMA_SCHEMA_NAME}.tables`,
+      { maxResults: 10000 }
     );
-    return result.map(row => ({
+    return rows.map(row => ({
       schema: row[TABLE_SCHEMA_COL_NAME],
       name: row[TABLE_NAME_COL_NAME]
     }));
@@ -99,15 +100,15 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
       )
     ]);
 
-    if (tableData.length === 0) {
-      throw new Error(`Could not find relation: ${target.schema}.${target.name}`);
+    if (tableData.rows.length === 0) {
+      return null;
     }
 
     // The table exists.
     return {
       target,
-      type: tableData[0][TABLE_TYPE_COL_NAME] === "VIEW" ? "view" : "table",
-      fields: columnData.map(row => ({
+      type: tableData.rows[0][TABLE_TYPE_COL_NAME] === "VIEW" ? "view" : "table",
+      fields: columnData.rows.map(row => ({
         name: row[COLUMN_NAME_COL_NAME],
         primitive: row[DATA_TYPE_COL_NAME],
         flags: row[IS_NULLABLE_COL_NAME] && row[IS_NULLABLE_COL_NAME] === "YES" ? ["nullable"] : []
@@ -116,7 +117,10 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
   }
 
   public async preview(target: dataform.ITarget, limitRows: number = 10): Promise<any[]> {
-    return this.execute(`SELECT TOP ${limitRows} * FROM "${target.schema}"."${target.name}"`);
+    const { rows } = await this.execute(
+      `SELECT TOP ${limitRows} * FROM "${target.schema}"."${target.name}"`
+    );
+    return rows;
   }
 
   public async prepareSchema(schema: string): Promise<void> {
@@ -126,5 +130,9 @@ export class SQLDataWarehouseDBAdapter implements IDbAdapter {
               exec sp_executesql N'create schema ${schema}'
             end `
     );
+  }
+
+  public async close() {
+    await (await this.pool).close();
   }
 }

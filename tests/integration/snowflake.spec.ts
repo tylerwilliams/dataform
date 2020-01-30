@@ -3,21 +3,24 @@ import * as dbadapters from "@dataform/api/dbadapters";
 import * as adapters from "@dataform/core/adapters";
 import { dataform } from "@dataform/protos";
 import { expect } from "chai";
+import { SnowflakeAdapter } from "df/core/adapters/snowflake";
+import { suite, test } from "df/testing";
 import { dropAllTables, getTableRows, keyBy } from "df/tests/integration/utils";
 
-describe("@dataform/integration/snowflake", () => {
-  const credentials = dfapi.credentials.read("snowflake", "df/test_credentials/snowflake.json");
+suite("@dataform/integration/snowflake", ({ after }) => {
+  const credentials = dfapi.credentials.read("snowflake", "test_credentials/snowflake.json");
   const dbadapter = dbadapters.create(credentials, "snowflake");
+  after("close adapter", () => dbadapter.close());
 
-  it("run", async () => {
+  test("run", { timeout: 60000 }, async () => {
     const compiledGraph = await dfapi.compile({
-      projectDir: "df/tests/integration/snowflake_project"
+      projectDir: "tests/integration/snowflake_project"
     });
 
     expect(compiledGraph.graphErrors.compilationErrors).to.eql([]);
     expect(compiledGraph.graphErrors.validationErrors).to.eql([]);
 
-    const adapter = adapters.create(compiledGraph.projectConfig);
+    const adapter = adapters.create(compiledGraph.projectConfig, compiledGraph.dataformCoreVersion);
 
     // Drop all the tables before we do anything.
     await dropAllTables(compiledGraph, adapter, dbadapter);
@@ -58,6 +61,37 @@ describe("@dataform/integration/snowflake", () => {
 
     const actionMap = keyBy(executedGraph.actions, v => v.name);
 
+    // Check the status of file execution.
+    const expectedRunStatuses = {
+      successful: [
+        "DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_PASS",
+        "DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_PASS",
+        "DF_INTEGRATION_TEST.EXAMPLE_INCREMENTAL",
+        "DF_INTEGRATION_TEST.EXAMPLE_TABLE",
+        "DF_INTEGRATION_TEST.EXAMPLE_VIEW",
+        "DF_INTEGRATION_TEST.LOAD_FROM_S3",
+        "TADA2.DF_INTEGRATION_TEST.SAMPLE_DATA_2",
+        "DF_INTEGRATION_TEST.SAMPLE_DATA"
+      ],
+      failed: [
+        "DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_FAIL",
+        "DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_FAIL"
+      ]
+    };
+
+    expectedRunStatuses.successful.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL)
+    );
+
+    expectedRunStatuses.failed.forEach(actionName =>
+      expect(actionMap[actionName].status).equals(dataform.ActionResult.ExecutionStatus.FAILED)
+    );
+
+    expect(
+      actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_FAIL"].tasks[1]
+        .errorMessage
+    ).to.eql("snowflake error: Assertion failed: query returned 1 row(s).");
+
     // Check the status of the s3 load operation.
     expect(actionMap["DF_INTEGRATION_TEST.LOAD_FROM_S3"].status).equals(
       dataform.ActionResult.ExecutionStatus.SUCCESSFUL
@@ -71,25 +105,17 @@ describe("@dataform/integration/snowflake", () => {
     const s3Rows = await getTableRows(s3Table.target, adapter, credentials, "snowflake");
     expect(s3Rows.length).equals(2);
 
-    // Check the status of the two assertions.
-    expect(actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_FAIL"].status).equals(
-      dataform.ActionResult.ExecutionStatus.FAILED
+    // Check the status of the view in the non-default database.
+    const tada2DatabaseView = keyBy(compiledGraph.tables, t => t.name)[
+      "TADA2.DF_INTEGRATION_TEST.SAMPLE_DATA_2"
+    ];
+    const tada2DatabaseViewRows = await getTableRows(
+      tada2DatabaseView.target,
+      adapter,
+      credentials,
+      "snowflake"
     );
-    expect(actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_PASS"].status).equals(
-      dataform.ActionResult.ExecutionStatus.SUCCESSFUL
-    );
-
-    // Check the status of the two uniqueness assertions.
-    expect(
-      actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_FAIL"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.FAILED);
-    expect(
-      actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_FAIL"].tasks[1]
-        .errorMessage
-    ).to.eql("Assertion failed: query returned 1 row(s).");
-    expect(
-      actionMap["DF_INTEGRATION_TEST_ASSERTIONS.EXAMPLE_ASSERTION_UNIQUENESS_PASS"].status
-    ).equals(dataform.ActionResult.ExecutionStatus.SUCCESSFUL);
+    expect(tada2DatabaseViewRows.length).equals(3);
 
     // Check the data in the incremental table.
     let incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
@@ -101,8 +127,7 @@ describe("@dataform/integration/snowflake", () => {
       credentials,
       "snowflake"
     );
-
-    expect(incrementalRows.length).equals(1);
+    expect(incrementalRows.length).equals(3);
 
     // Re-run some of the actions.
     executionGraph = await dfapi.build(
@@ -116,7 +141,7 @@ describe("@dataform/integration/snowflake", () => {
     executedGraph = await dfapi.run(executionGraph, credentials).resultPromise();
     expect(executedGraph.status).equals(dataform.RunResult.ExecutionStatus.SUCCESSFUL);
 
-    // Check there is an extra row in the incremental table.
+    // Check there are the expected number of extra rows in the incremental table.
     incrementalTable = keyBy(compiledGraph.tables, t => t.name)[
       "DF_INTEGRATION_TEST.EXAMPLE_INCREMENTAL"
     ];
@@ -126,10 +151,10 @@ describe("@dataform/integration/snowflake", () => {
       credentials,
       "snowflake"
     );
-    expect(incrementalRows.length).equals(2);
-  }).timeout(60000);
+    expect(incrementalRows.length).equals(5);
+  });
 
-  describe("result limit works", async () => {
+  suite("result limit works", async () => {
     const query = `
       select 1 union all
       select 2 union all
@@ -138,8 +163,9 @@ describe("@dataform/integration/snowflake", () => {
       select 5`;
 
     for (const interactive of [true, false]) {
-      it(`with interactive=${interactive}`, async () => {
-        expect(await dbadapter.execute(query, { interactive, maxResults: 2 })).eql([
+      test(`with interactive=${interactive}`, async () => {
+        const { rows } = await dbadapter.execute(query, { interactive, maxResults: 2 });
+        expect(rows).eql([
           {
             1: 1
           },
@@ -149,5 +175,37 @@ describe("@dataform/integration/snowflake", () => {
         ]);
       });
     }
+  });
+
+  suite("publish tasks", async () => {
+    test("incremental pre and post ops, core version <= 1.4.8", async () => {
+      // 1.4.8 used `preOps` and `postOps` instead of `incrementalPreOps` and `incrementalPostOps`.
+      const table: dataform.ITable = {
+        type: "incremental",
+        query: "query",
+        preOps: ["preop task1", "preop task2"],
+        incrementalQuery: "",
+        postOps: ["postop task1", "postop task2"],
+        target: { schema: "", name: "", database: "" }
+      };
+
+      const bqadapter = new SnowflakeAdapter({ warehouse: "snowflake" }, "1.4.8");
+
+      const refresh = bqadapter.publishTasks(table, { fullRefresh: true }, { fields: [] }).build();
+
+      expect(refresh[0].statement).to.equal(table.preOps[0]);
+      expect(refresh[1].statement).to.equal(table.preOps[1]);
+      expect(refresh[refresh.length - 2].statement).to.equal(table.postOps[0]);
+      expect(refresh[refresh.length - 1].statement).to.equal(table.postOps[1]);
+
+      const increment = bqadapter
+        .publishTasks(table, { fullRefresh: false }, { fields: [] })
+        .build();
+
+      expect(increment[0].statement).to.equal(table.preOps[0]);
+      expect(increment[1].statement).to.equal(table.preOps[1]);
+      expect(increment[increment.length - 2].statement).to.equal(table.postOps[0]);
+      expect(increment[increment.length - 1].statement).to.equal(table.postOps[1]);
+    });
   });
 });

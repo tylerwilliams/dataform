@@ -1,18 +1,15 @@
+import { IAdapter } from "@dataform/core/adapters";
+import { Adapter } from "@dataform/core/adapters/base";
+import { Task, Tasks } from "@dataform/core/tasks";
 import { dataform } from "@dataform/protos";
-import { Task, Tasks } from "../tasks";
-import { Adapter } from "./base";
-import { IAdapter } from "./index";
 
 export class SnowflakeAdapter extends Adapter implements IAdapter {
-  private project: dataform.IProjectConfig;
-
-  constructor(project: dataform.IProjectConfig) {
-    super();
-    this.project = project;
+  constructor(private readonly project: dataform.IProjectConfig, dataformCoreVersion: string) {
+    super(dataformCoreVersion);
   }
 
   public resolveTarget(target: dataform.ITarget) {
-    return `"${target.schema}"."${target.name}"`;
+    return `${!!target.database ? `"${target.database}".` : ""}"${target.schema}"."${target.name}"`;
   }
 
   public normalizeIdentifier(identifier: string) {
@@ -25,23 +22,25 @@ export class SnowflakeAdapter extends Adapter implements IAdapter {
     tableMetadata: dataform.ITableMetadata
   ): Tasks {
     const tasks = Tasks.create();
-    // Drop the existing view or table if we are changing it's type.
-    if (tableMetadata && tableMetadata.type != this.baseTableType(table.type)) {
+
+    this.preOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
+    if (tableMetadata && tableMetadata.type !== this.baseTableType(table.type)) {
       tasks.add(
         Task.statement(this.dropIfExists(table.target, this.oppositeTableType(table.type)))
       );
     }
-    if (table.type == "incremental") {
-      if (runConfig.fullRefresh || !tableMetadata || tableMetadata.type == "view") {
+
+    if (table.type === "incremental") {
+      if (!this.shouldWriteIncrementally(runConfig, tableMetadata)) {
         tasks.add(Task.statement(this.createOrReplace(table)));
       } else {
-        // The table exists, insert new rows.
         tasks.add(
           Task.statement(
             this.insertInto(
               table.target,
               tableMetadata.fields.map(f => f.name),
-              this.where(table.query, table.where)
+              this.where(table.incrementalQuery || table.query, table.where)
             )
           )
         );
@@ -49,6 +48,9 @@ export class SnowflakeAdapter extends Adapter implements IAdapter {
     } else {
       tasks.add(Task.statement(this.createOrReplace(table)));
     }
+
+    this.postOps(table, runConfig, tableMetadata).forEach(statement => tasks.add(statement));
+
     return tasks;
   }
 

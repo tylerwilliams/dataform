@@ -2,25 +2,9 @@
 @value colorsButtonBlue: #5e73e5;
 @value colorsButtonGreen: #00C37D;
 
-:global body .bp3-button {
-  font-weight: bold;
-  text-transform: uppercase;
-  background-color: #5e73e5;
-  padding: 8px 24px;
-  height: 40px;
-  margin-top: -8px;
-  border: none;
-  box-shadow: unset !important;
-  -webkit-box-shadow: unset !important;
-  border-radius: 4px;
-  background-image: unset !important;
+:global body {
+  overflow-y: scroll !important;
 }
-
-:global body .bp3-button * {
-  color: #fff;
-  font-size: 12px;
-}
-
 :global body .bp3-button.bp3-intent-primary {
   background-color: colorsButtonBlue;
 }
@@ -63,50 +47,48 @@
 
 :global body a {
   text-decoration: none;
-  color: #2F419B;
+  color: #2f419b;
+}
+
+:global body a:hover {
+  text-decoration: none;
+  color: black;
+}
+
+:global h1,
+:global h2,
+:global h3,
+:global h4,
+:global h5 {
+  font-family: "Poppins";
+  letter-spacing: -0.03em;
+  color: #2f2d44;
+  font-weight: 500;
 }
 
 :global body h1 {
-  color: colorsTextMain;
-  font-family: "Poppins";
-  font-weight: 500;
-  letter-spacing: -0.03em;
   line-height: 58px;
   font-size: 31px;
-  margin: 0px;
-  color: #2f2d44;
 }
 
 :global body h2 {
-  color: colorsTextMain;
-  font-family: "Poppins";
-  font-weight: 500;
-  letter-spacing: -0.02em;
   line-height: 22px;
   font-size: 22px;
-  color: #2f2d44;
 }
 
 :global body h3 {
-  color: colorsTextMain;
-  font-family: "Poppins";
-  font-weight: 500;
-  letter-spacing: -0.02em;
   line-height: 46px;
   font-size: 20px;
-  margin: 0px;
-  color: #2f2d44;
 }
 
 :global body h4 {
-  color: colorsTextMain;
-  font-family: "Poppins";
-  font-weight: 500;
-  letter-spacing: -0.02em;
   line-height: 36px;
   font-size: 17px;
-  margin: 0px;
-  color: #2f2d44;
+}
+
+:global body h5 {
+  line-height: 26px;
+  font-size: 14px;
 }
 
 :global body p,
@@ -114,8 +96,8 @@
   font-style: normal;
   font-weight: normal;
   line-height: 30px;
-  color: #373e42;
 }
+
 :global body li {
   font-style: normal;
   font-weight: normal;
