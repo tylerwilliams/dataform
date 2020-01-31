@@ -67,9 +67,7 @@ module.exports = (env, argv) => {
             {
               loader: "css-loader",
               query: {
-                modules: true,
-                namedExport: true,
-                localIdentName: "[name]__[local]___[hash:base64:5]"
+                modules: true
               }
             }
           ]

@@ -10,14 +10,20 @@ filegroup(
     ]),
 )
 
-filegroup(
-    name = "css",
-    srcs = glob(["**/*.css"]),
+load("@io_bazel_rules_sass//:defs.bzl", "multi_sass_binary")
+
+multi_sass_binary(
+    name = "sass",
+    srcs = glob(["**/*.scss"]),
+    output_style = "expanded",
+    sourcemap = False,
 )
 
 css_typings(
     name = "css_typings",
-    srcs = glob(["**/*.css"]),
+    srcs = [
+        ":sass",
+    ],
 )
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
@@ -31,9 +37,10 @@ ts_library(
         ],
         exclude = ["webpack.ts"],
     ),
-    data = [":css"],
+    data = [":sass"],
     deps = [
         ":css_typings",
+        "//components",
         "//protos",
         "//tools/protobufjs:grpc_web_rpc_impl",
         "@npm//@blueprintjs/core",
@@ -61,7 +68,9 @@ webpack_dev_server(
     data = [
         ":assets",
         ":client",
+        ":sass",
         ":webpack.config.js",
+        "//components:sass",
         "@npm//webpack-cli",
     ],
     tags = [
@@ -76,7 +85,9 @@ webpack(
     data = [
         ":assets",
         ":client",
+        ":sass",
         ":webpack.config.js",
+        "//components:sass",
         "@npm//webpack-cli",
     ],
 )
