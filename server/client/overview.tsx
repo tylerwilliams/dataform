@@ -16,6 +16,7 @@ import { List, ListItem } from "df/components/list";
 import { DataformDag } from "df/dataform/components/dag";
 import { BigqueryForm } from "df/dataform/components/database/bigquery_form";
 import { Flow } from "df/server/client/components/flow";
+import * as styles from "df/server/client/overview.css";
 import { Service } from "df/server/client/service";
 import * as React from "react";
 
@@ -40,7 +41,7 @@ export class Overview extends React.Component<IProps, IState> {
 
   public render() {
     return (
-      <div>
+      <div className={styles.overviewContainer}>
         <Navbar>
           <NavbarGroup>
             <Button icon="menu" minimal={true} />
@@ -73,7 +74,9 @@ export class Overview extends React.Component<IProps, IState> {
             </List>
           )}
         </Card> */}
-        {this.state.response && <DataformDag graph={this.state.response.graph} />}
+        <div className={styles.dagContainer}>
+          {this.state.response && <DataformDag graph={this.state.response.graph} />}
+        </div>
       </div>
     );
   }

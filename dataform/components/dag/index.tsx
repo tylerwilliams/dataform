@@ -7,7 +7,8 @@ import {
   Popover,
   Switch,
   Tag,
-  Tooltip
+  Tooltip,
+  NonIdealState
 } from "@blueprintjs/core";
 import { MultiSelect } from "@blueprintjs/select";
 import { dataform } from "@dataform/protos";
@@ -122,41 +123,56 @@ export class DataformDag extends React.Component<IProps, IState> {
           </Navbar.Group>
         </Navbar>
         <div className={styles.dagContainer}>
-          <ActionDag
-            nodes={actionsToRender}
-            dependenciesFn={node => node.dependencies || []}
-            idFn={node => node.name}
-            rendererFn={action => (
-              <div className={styles.nodeContent}>
-                <div>
-                  <Tooltip content={action.name}>
-                    <span>{action.target ? action.target.name : action.name}</span>
-                  </Tooltip>
+          {actionsToRender.length === 0 && (
+            <NonIdealState
+              icon="search"
+              title="No actions defined in this project"
+              description={
+                <p>
+                  To get started with Dataform, create a SQLX file in your project directory{" "}
+                  <code>definitions/</code> folder by following the{" "}
+                  <a href="https://docs.dataform.co/how-to-guides/datasets">how-to-guide</a>.
+                </p>
+              }
+            />
+          )}
+          {actionsToRender.length > 0 && (
+            <ActionDag
+              nodes={actionsToRender}
+              dependenciesFn={node => node.dependencies || []}
+              idFn={node => node.name}
+              rendererFn={action => (
+                <div className={styles.nodeContent}>
+                  <div>
+                    <Tooltip content={action.name}>
+                      <span>{action.target ? action.target.name : action.name}</span>
+                    </Tooltip>
+                  </div>
+                  <div className={styles.nodeContentInfo}>
+                    <Tag>{action.type}</Tag>
+                    <Popover position={"bottom"}>
+                      <Button icon="more" small={true} minimal={true} />
+                      <Menu>
+                        <MenuItem
+                          icon="pivot"
+                          text="Highlight dependencies"
+                          onClick={() =>
+                            this.setState(state => ({
+                              selectedActionNames: [action.name]
+                            }))
+                          }
+                        />
+                      </Menu>
+                    </Popover>
+                  </div>
                 </div>
-                <div className={styles.nodeContentInfo}>
-                  <Tag>{action.type}</Tag>
-                  <Popover position={"bottom"}>
-                    <Button icon="more" small={true} minimal={true} />
-                    <Menu>
-                      <MenuItem
-                        icon="pivot"
-                        text="Highlight dependencies"
-                        onClick={() =>
-                          this.setState(state => ({
-                            selectedActionNames: [action.name]
-                          }))
-                        }
-                      />
-                    </Menu>
-                  </Popover>
-                </div>
-              </div>
-            )}
-            nodeWidth={180}
-            nodeHeight={60}
-            nodePaddingX={40}
-            nodePaddingY={10}
-          />
+              )}
+              nodeWidth={180}
+              nodeHeight={60}
+              nodePaddingX={40}
+              nodePaddingY={10}
+            />
+          )}
         </div>
       </div>
     );

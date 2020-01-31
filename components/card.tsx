@@ -28,18 +28,29 @@ export const Card = ({
   </div>
 );
 
+export interface ICardActionProps {
+  align?: "left" | "right";
+}
+
 export const CardActions = ({
+  align,
   children,
   className,
   ...rest
-}: React.PropsWithChildren<{}> & React.HTMLAttributes<HTMLDivElement>) => (
-  <>
-    <div className={styles.cardActionsSpacer} />
-    <div {...rest} className={[styles.cardActions, className].join(" ")}>
-      {children}
-    </div>
-  </>
-);
+}: React.PropsWithChildren<ICardActionProps> & React.HTMLAttributes<HTMLDivElement>) => {
+  const classNames = [styles.cardActions, className];
+  if (align === "right") {
+    classNames.push(styles.cardActionsRight);
+  }
+  return (
+    <>
+      <div className={styles.cardActionsSpacer} />
+      <div {...rest} className={classNames.join(" ")}>
+        {children}
+      </div>
+    </>
+  );
+};
 
 export const CardMedia = ({
   children,

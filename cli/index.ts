@@ -197,20 +197,6 @@ const builtYargs = createYargsCli({
             ? "start"
             : "xdg-open";
         exec(`${openCommand} http://localhost:9110/init`);
-        // print("Writing project files...\n");
-        // const initResult = await init(
-        //   argv["project-dir"],
-        //   {
-        //     warehouse: argv.warehouse,
-        //     defaultDatabase: argv["default-database"]
-        //   },
-        //   {
-        //     skipInstall: argv["skip-install"],
-        //     includeSchedules: argv["include-schedules"],
-        //     includeEnvironments: argv["include-environments"]
-        //   }
-        // );
-        // printInitResult(initResult);
         await new Promise(resolve => setTimeout(resolve, 100000));
         return 0;
       }
@@ -590,6 +576,29 @@ const builtYargs = createYargsCli({
             name: argv.table
           })
         );
+        return 0;
+      }
+    },
+    {
+      format: "serve [project-dir]",
+      description: "Run the local server for the dataform project.",
+      positionalOptions: [projectDirMustExistOption],
+      options: [],
+      processFn: async argv => {
+        const dataformServer = new DataformServer({
+          httpPort: 9110,
+          projectDir: argv["project-dir"]
+        });
+        dataformServer.start();
+        const openCommand =
+          process.platform === "darwin"
+            ? "open"
+            : process.platform === "win32"
+            ? "start"
+            : "xdg-open";
+        exec(`${openCommand} http://localhost:9110/`);
+        // Don't exit.
+        await new Promise(resolve => setTimeout(resolve, 9999999));
         return 0;
       }
     }

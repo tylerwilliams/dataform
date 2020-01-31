@@ -9,6 +9,7 @@ import * as React from "react";
 import { Link } from "react-router-dom";
 
 interface IState {
+  warehouse?: "bigquery" | "redshift" | "snowflake" | "postgres";
   profile?: dataform.IBigQuery;
   step?: number;
 }
@@ -35,14 +36,42 @@ export default class Initialize extends React.Component<IProps, IState> {
     return (
       <Flow step={step}>
         <Card header="Initialize Dataform project" headerRight={directoryTag}>
-          <Form>
-            <FormItem name={"Select warehouse type"}>
-              <Button text="BigQuery" />
-            </FormItem>
-          </Form>
+          <h4>Select warehouse type</h4>
           <CardActions>
             <Button
-              text="Create project"
+              text={<img src="/public/bigquery-logo.png" style={{ height: "80px" }} />}
+              minimal={true}
+              active={this.state.warehouse === "bigquery"}
+              onClick={() => this.setState({ warehouse: "bigquery" })}
+            />
+
+            <Button
+              text={<img src="/public/redshift-logo.png" style={{ height: "80px" }} />}
+              minimal={true}
+              active={this.state.warehouse === "redshift"}
+              onClick={() => this.setState({ warehouse: "redshift" })}
+            />
+
+            <Button
+              text={<img src="/public/snowflake-logo.png" style={{ height: "80px" }} />}
+              minimal={true}
+              active={this.state.warehouse === "snowflake"}
+              onClick={() => this.setState({ warehouse: "snowflake" })}
+            />
+
+            <Button
+              text={<img src="/public/postgres-logo.png" style={{ height: "80px" }} />}
+              minimal={true}
+              active={this.state.warehouse === "postgres"}
+              onClick={() => this.setState({ warehouse: "postgres" })}
+            />
+          </CardActions>
+          <CardActions align="right">
+            <Button
+              disabled={!this.state.warehouse}
+              text="Configure project"
+              intent="primary"
+              rightIcon="caret-right"
               onClick={() => this.setState(state => ({ step: state.step + 1 }))}
             />
           </CardActions>
@@ -53,9 +82,11 @@ export default class Initialize extends React.Component<IProps, IState> {
             onChange={profile => this.setState({ profile })}
           />
 
-          <CardActions>
+          <CardActions align="right">
             <Button
               text="Create project"
+              intent="primary"
+              rightIcon="caret-right"
               onClick={async () => {
                 this.setState(state => ({ step: state.step + 1 }));
                 await this.createProject();
@@ -74,9 +105,9 @@ export default class Initialize extends React.Component<IProps, IState> {
             <a href="http://docs.dataform.co">Dataform documentation</a> for help with publishing
             your first data sets.
           </p>
-          <CardActions>
+          <CardActions align="right">
             <Link to="/">
-              <Button text="Project overview" />
+              <Button text="Open project overview" intent="primary" />
             </Link>
           </CardActions>
         </Card>
