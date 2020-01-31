@@ -1,0 +1,27 @@
+.edge {
+  position: absolute;
+  line-height: 0px;
+  z-index: 1;
+}
+
+.edge.straight {
+  background-color: #e8e8e8;
+  border-radius: 2px;
+}
+
+.svg {
+  stroke: #e8e8e8;
+}
+
+.edge.highlight {
+  z-index: 2;
+}
+
+.edge.straight.highlight {
+  background-color: #2f419b;
+}
+
+.edge.highlight .svg {
+  stroke: #2f419b;
+  transition: stroke 0.5s;
+}

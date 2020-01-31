@@ -10,6 +10,7 @@ ts_library(
         "//api",
         "//core",
         "//protos",
+        "//server",
         "@npm//@types/glob",
         "@npm//@types/long",
         "@npm//@types/node",
@@ -27,12 +28,12 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 
 nodejs_binary(
     name = "bin",
-    templated_args = ["--node_options=--require=source-map-support/register"],
     data = [
         ":cli",
         "@npm//source-map-support",
     ],
     entry_point = ":index.ts",
+    templated_args = ["--node_options=--require=source-map-support/register"],
 )
 
 load("//tools/common:copy.bzl", "copy_file")

@@ -5,37 +5,38 @@ import { dataform as protos } from "@dataform/protos";
 import { Service } from "@dataform/server/service/grpc_service";
 import { writeFile } from "fs";
 import * as grpc from "grpc";
-import { join } from "path";
+import { join, resolve } from "path";
 import { promisify } from "util";
 
 export class ServiceImpl implements Service {
-  constructor(private readonly directory: string, private onShutdown: () => void) {}
+  constructor(private readonly projectDir: string, private onShutdown: () => void) {}
+  public async metadata(
+    call: grpc.ServerUnaryCall<protos.server.IEmpty>
+  ): Promise<protos.server.IMetadataResponse> {
+    return {
+      projectDir: this.projectDir
+    };
+  }
 
-  public compile(
+  public async compile(
     call: grpc.ServerUnaryCall<protos.server.IEmpty>
   ): Promise<protos.server.ICompileResponse> {
-    throw new Error("Method not implemented.");
-  }
-  public projectState(
-    call: grpc.ServerUnaryCall<protos.server.IEmpty>
-  ): Promise<protos.server.IProjectStateResponse> {
-    throw new Error("Method not implemented.");
-  }
-  public async initialize(
-    call: grpc.ServerUnaryCall<protos.server.IInitializeRequest>
-  ): Promise<protos.server.IEmpty> {
-    await dfapi.init(this.directory, {});
-    return {};
+    return {
+      graph: await dfapi.compile({
+        projectDir: this.projectDir
+      })
+    };
   }
 
-  public async initializeCredentials(
-    call: grpc.ServerUnaryCall<protos.server.IInitializeCredentialsRequest>
-  ): Promise<protos.server.IEmpty> {
+  public async initialize(
+    call: grpc.ServerUnaryCall<protos.server.IInitializeRequest>
+  ): Promise<protos.server.IInitializeResponse> {
+    await dfapi.init(this.projectDir, call.request.projectConfig || {});
     await promisify(writeFile)(
-      join(this.directory, dfapi.credentials.CREDENTIALS_FILENAME),
+      join(this.projectDir, dfapi.credentials.CREDENTIALS_FILENAME),
       JSON.stringify(call.request.bigquery)
     );
-    return {};
+    return { directory: this.projectDir };
   }
 
   public async shutdown(

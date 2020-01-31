@@ -1,0 +1,33 @@
+.dataformDag {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.nodeContent {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  justify-content: space-between;
+  cursor: default;
+}
+
+.nodeContentInfo {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.dagContainer {
+  flex-grow: 1;
+  max-width: 100%;
+  overflow: auto;
+}
+
+.dagContainer > * {
+  margin: auto;
+}
+
+.actionSearchInput {
+  min-width: 300px;
+}

@@ -27,7 +27,9 @@ import { actuallyResolve, assertPathExists, compiledGraphHasErrors } from "@data
 import { createYargsCli, INamedOption } from "@dataform/cli/yargswrapper";
 import { supportsCancel, WarehouseType } from "@dataform/core/adapters";
 import { dataform } from "@dataform/protos";
+import { exec } from "child_process";
 import * as chokidar from "chokidar";
+import { DataformServer } from "df/server";
 import * as fs from "fs";
 import * as glob from "glob";
 import * as path from "path";
@@ -36,7 +38,7 @@ import * as yargs from "yargs";
 const RECOMPILE_DELAY = 500;
 
 process.on("unhandledRejection", reason =>
-  printError("Unhandled promise rejection:", reason.stack || reason)
+  printError(`Unhandled promise rejection: ${reason.stack || reason}  `)
 );
 
 const projectDirOption: INamedOption<yargs.PositionalOptions> = {
@@ -156,29 +158,10 @@ const builtYargs = createYargsCli({
       }
     },
     {
-      format: "init <warehouse> [project-dir]",
+      format: "init [project-dir]",
       description: "Create a new dataform project.",
       positionalOptions: [warehouseOption, projectDirOption],
       options: [
-        {
-          name: "default-database",
-          option: {
-            describe:
-              "The default database to use. For BigQuery, this is a Google Cloud Project ID."
-          },
-          check: (argv: yargs.Arguments) => {
-            if (argv["default-database"] && !["bigquery", "snowflake"].includes(argv.warehouse)) {
-              throw new Error(
-                "The --default-database flag is only used for BigQuery and Snowflake projects."
-              );
-            }
-            if (!argv["default-database"] && argv.warehouse === "bigquery") {
-              throw new Error(
-                "The --default-database flag is required for BigQuery projects. Please run 'dataform help init' for more information."
-              );
-            }
-          }
-        },
         {
           name: "skip-install",
           option: {
@@ -202,20 +185,33 @@ const builtYargs = createYargsCli({
         }
       ],
       processFn: async argv => {
-        print("Writing project files...\n");
-        const initResult = await init(
-          argv["project-dir"],
-          {
-            warehouse: argv.warehouse,
-            defaultDatabase: argv["default-database"]
-          },
-          {
-            skipInstall: argv["skip-install"],
-            includeSchedules: argv["include-schedules"],
-            includeEnvironments: argv["include-environments"]
-          }
-        );
-        printInitResult(initResult);
+        const dataformServer = new DataformServer({
+          httpPort: 9110,
+          projectDir: argv["project-dir"]
+        });
+        dataformServer.start();
+        const openCommand =
+          process.platform === "darwin"
+            ? "open"
+            : process.platform === "win32"
+            ? "start"
+            : "xdg-open";
+        exec(`${openCommand} http://localhost:9110/init`);
+        // print("Writing project files...\n");
+        // const initResult = await init(
+        //   argv["project-dir"],
+        //   {
+        //     warehouse: argv.warehouse,
+        //     defaultDatabase: argv["default-database"]
+        //   },
+        //   {
+        //     skipInstall: argv["skip-install"],
+        //     includeSchedules: argv["include-schedules"],
+        //     includeEnvironments: argv["include-environments"]
+        //   }
+        // );
+        // printInitResult(initResult);
+        await new Promise(resolve => setTimeout(resolve, 100000));
         return 0;
       }
     },

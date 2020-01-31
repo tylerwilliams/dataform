@@ -1,0 +1,44 @@
+.node {
+  position: absolute;
+}
+
+.node .content {
+  overflow: hidden;
+  padding: 6px;
+  position: absolute;
+  background-color: #eaebf5;
+  border-radius: 5px;
+  right: 0px;
+  left: 0px;
+  top: 0px;
+  bottom: 0px;
+  z-index: 4;
+  transition: background-color 0.5s;
+}
+
+.node.hasDependencies:before,
+.node.hasDependents:after {
+  background: #9e9ea5;
+  border-radius: 50%;
+  content: "";
+  display: block;
+  height: 16px;
+  position: absolute;
+  top: 50%;
+  width: 16px;
+  z-index: 3;
+}
+
+.node.hasDependencies:before {
+  left: 0px;
+  margin: -8px 0 0 -8px;
+}
+
+.node.hasDependents:after {
+  right: 0px;
+  margin: -8px -8px 0 0px;
+}
+
+.node.highlight .content {
+  background-color: #d4d7f3;
+}

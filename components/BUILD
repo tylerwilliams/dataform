@@ -30,6 +30,8 @@ ts_library(
         "*.tsx",
         "forms/*.ts",
         "forms/*.tsx",
+        "dag/*.ts",
+        "dag/*.tsx",
     ]),
     data = [
         ":sass",
@@ -39,7 +41,9 @@ ts_library(
         "@npm//@blueprintjs/core",
         "@npm//@blueprintjs/icons",
         "@npm//@blueprintjs/select",
+        "@npm//@types/node",
         "@npm//@types/react",
+        "@npm//fast-memoize",
         "@npm//react",
     ],
 )

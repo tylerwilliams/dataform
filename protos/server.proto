@@ -7,21 +7,22 @@ import "protos/core.proto";
 message Empty {}
 
 message InitializeRequest {
-    ProjectConfig project_config = 1;
-}
-
-message InitializeCredentialsRequest {
+    ProjectConfig project_config = 6;
     oneof connection {
         dataform.JDBC redshift = 1;
         dataform.JDBC postgres = 2;
         dataform.BigQuery bigquery = 3;
         dataform.Snowflake snowflake = 4;
         dataform.SQLDataWarehouse sqldatawarehouse = 5;
-    }    
+    }
 }
 
-message ProjectStateResponse {
-    bool exists = 1;
+message InitializeResponse {
+}
+
+message MetadataResponse {
+    string dataform_api_version = 1;
+    string project_dir = 2;
 }
 
 message CompileResponse {
@@ -29,9 +30,8 @@ message CompileResponse {
 }
 
 service Service {
+    rpc Metadata (dataform.server.Empty) returns (dataform.server.MetadataResponse);
     rpc Compile (dataform.server.Empty) returns (dataform.server.CompileResponse);
-    rpc ProjectState (dataform.server.Empty) returns (dataform.server.ProjectStateResponse);
-    rpc Initialize (dataform.server.InitializeRequest) returns (dataform.server.Empty);
-    rpc InitializeCredentials (dataform.server.InitializeCredentialsRequest) returns (dataform.server.Empty);
+    rpc Initialize (dataform.server.InitializeRequest) returns (dataform.server.InitializeResponse);
     rpc Shutdown (dataform.server.Empty) returns (dataform.server.Empty);
 }

@@ -15,21 +15,29 @@
         align-items: center;
         z-index: 100;
         background-color: white;
+        -webkit-transition: opacity 0.5s ease-in;
+        -moz-transition: opacity 0.5s ease-in;
+        -o-transition: opacity 0.5s ease-in;
+        -ms-transition: opacity 0.5s ease-in;
+        transition: opacity 0.5s ease-in;
       }
       #preloader_logo {
         width: 400px;
         max-width: 100%;
         opacity: 0;
-        -webkit-transition: opacity 1s ease-in;
-        -moz-transition: opacity 1s ease-in;
-        -o-transition: opacity 1s ease-in;
-        -ms-transition: opacity 1s ease-in;
-        transition: opacity 1s ease-in;
+        -webkit-transition: opacity 0.5s ease-in;
+        -moz-transition: opacity 0.5s ease-in;
+        -o-transition: opacity 0.5s ease-in;
+        -ms-transition: opacity 0.5s ease-in;
+        transition: opacity 0.5s ease-in;
       }
     </style>
     <script>
       document.addEventListener("DOMContentLoaded", function() {
         document.getElementById("preloader_logo").style.opacity = 1;
+        window.setTimeout(function() {
+          document.getElementById("preloader").style.opacity = 0;
+        }, 750);
         window.setTimeout(function() {
           document.getElementById("preloader").style.display = "none";
         }, 1500);

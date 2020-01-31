@@ -11,7 +11,7 @@ export class Server {
   public constructor(
     private port: number,
     private proxyPort: number,
-    private directory: string,
+    private projectDir: string,
     private onShutdown: () => void
   ) {
     this.server = new grpc.Server();
@@ -20,7 +20,7 @@ export class Server {
   public start() {
     this.server.addService(
       Service.DEFINITION,
-      new Service.ServicePromiseWrapper(new ServiceImpl(this.directory, this.onShutdown))
+      new Service.ServicePromiseWrapper(new ServiceImpl(this.projectDir, this.onShutdown))
     );
 
     this.server.bind(`0.0.0.0:${this.port}`, grpc.ServerCredentials.createInsecure());
@@ -40,16 +40,18 @@ export class Server {
   }
 }
 
-// const args = yargs
-//   .option("grpc-proxy-port", { default: 9111 })
-//   .option("grpc-port", { default: 9112 })
-//   .option("project-dir", { type: "string", required: true }).argv;
+if (require.main === module) {
+  const args = yargs
+    .option("grpc-proxy-port", { default: 9111 })
+    .option("grpc-port", { default: 9112 })
+    .option("project-dir", { type: "string", required: true }).argv;
 
-// const grpcServer = new Server(
-//   args["grpc-port"],
-//   args["grpc-proxy-port"],
-//   args["project-dir"],
-//   () => ({})
-// );
+  const grpcServer = new Server(
+    args["grpc-port"],
+    args["grpc-proxy-port"],
+    args["project-dir"],
+    () => ({})
+  );
 
-// grpcServer.start();
+  grpcServer.start();
+}

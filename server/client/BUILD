@@ -65,6 +65,7 @@ webpack_dev_server(
     args = [
         "--config=server/client/webpack.config.js",
         "--output=./app.bundle.js",
+        "--history-api-fallback",
     ],
     data = [
         ":assets",
@@ -72,6 +73,7 @@ webpack_dev_server(
         ":sass",
         ":webpack.config.js",
         "//components:sass",
+        "//dataform/components:sass",
         "@npm//webpack-cli",
     ],
     tags = [
@@ -89,6 +91,7 @@ webpack(
         ":sass",
         ":webpack.config.js",
         "//components:sass",
+        "//dataform/components:sass",
         "@npm//webpack-cli",
     ],
 )
@@ -106,9 +109,9 @@ npm_package_bin(
     ],
     data = [
         ":webpack.config.js",
-        "@npm//umd-compat-loader",
-        "@npm//style-loader",
         "@npm//css-loader",
+        "@npm//style-loader",
+        "@npm//umd-compat-loader",
     ],
     tool = ":bundler",
 )
