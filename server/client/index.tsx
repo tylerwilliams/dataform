@@ -5,13 +5,13 @@ import * as ReactDOM from "react-dom";
 import { Route } from "react-router";
 import { BrowserRouter } from "react-router-dom";
 
+const service = Service.get();
+
 ReactDOM.render(
   <BrowserRouter>
-    <Route path={"/"} component={(props: any) => <Initialize></Initialize>} />
+    <Route path={"/"} component={(props: any) => <Initialize service={service} />} />
   </BrowserRouter>,
   document.getElementById("root")
 );
-
-Service.get().initialize({});
 
 document.getElementById("preloader").style.display = "none";

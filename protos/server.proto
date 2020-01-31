@@ -11,7 +11,13 @@ message InitializeRequest {
 }
 
 message InitializeCredentialsRequest {
-    
+    oneof connection {
+        dataform.JDBC redshift = 1;
+        dataform.JDBC postgres = 2;
+        dataform.BigQuery bigquery = 3;
+        dataform.Snowflake snowflake = 4;
+        dataform.SQLDataWarehouse sqldatawarehouse = 5;
+    }    
 }
 
 message ProjectStateResponse {
@@ -27,4 +33,5 @@ service Service {
     rpc ProjectState (dataform.server.Empty) returns (dataform.server.ProjectStateResponse);
     rpc Initialize (dataform.server.InitializeRequest) returns (dataform.server.Empty);
     rpc InitializeCredentials (dataform.server.InitializeCredentialsRequest) returns (dataform.server.Empty);
+    rpc Shutdown (dataform.server.Empty) returns (dataform.server.Empty);
 }

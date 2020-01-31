@@ -10,7 +10,6 @@ ts_library(
     module_name = "@dataform/server",
     deps = [
         "//server/service",
-        "//tools/grpc-web-proxy",
         "@npm//@types/express",
         "@npm//@types/node",
         "@npm//@types/yargs",

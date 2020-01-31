@@ -21,9 +21,12 @@ ts_library(
         "//api",
         "//core",
         "//protos",
+        "//tools/grpc-web-proxy",
         "@npm//@types/node",
+        "@npm//@types/yargs",
         "@npm//grpc",
         "@npm//protobufjs",
+        "@npm//yargs",
     ],
 )
 

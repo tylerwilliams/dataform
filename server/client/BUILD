@@ -41,6 +41,7 @@ ts_library(
     deps = [
         ":css_typings",
         "//components",
+        "//dataform/components",
         "//protos",
         "//tools/protobufjs:grpc_web_rpc_impl",
         "@npm//@blueprintjs/core",
@@ -106,6 +107,8 @@ npm_package_bin(
     data = [
         ":webpack.config.js",
         "@npm//umd-compat-loader",
+        "@npm//style-loader",
+        "@npm//css-loader",
     ],
     tool = ":bundler",
 )
