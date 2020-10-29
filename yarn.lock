@@ -1592,10 +1592,10 @@
     "@types/unist" "*"
     "@types/vfile-message" "*"
 
-"@types/yargs@11.1.2":
-  version "11.1.2"
-  resolved "https://registry.yarnpkg.com/@types/yargs/-/yargs-11.1.2.tgz#fd4b676846fe731a5de5c6d2e5ef6a377262fc30"
-  integrity sha512-zG61PAp2OcoIBjRV44wftJj6AJgzJrOc32LCYOBqk9bdgcdzK5DCJHV9QZJ60+Fu+fOn79g8Ks3Gixm4CfkZ+w==
+"@types/yargs@11.1.7":
+  version "11.1.7"
+  resolved "https://registry.yarnpkg.com/@types/yargs/-/yargs-11.1.7.tgz#a5be4a5f0f4b77b8accdd476004ce911f4241e8f"
+  integrity sha512-ynyKD3/wNHw9/vwYpiVqsrkDZjezXH7aVkg+Xp73irK0WzYYHkBOogiiM6/+eufAxmZxew3aZhAkrrjsOKbLOA==
 
 "@webassemblyjs/ast@1.7.8":
   version "1.7.8"
