@@ -28,7 +28,7 @@
     "@types/readline-sync": "1.4.3",
     "@types/request": "2.48.3",
     "@types/rimraf": "2.0.2",
-    "@types/semver": "6.2.0",
+    "@types/semver": "6.2.3",
     "@types/stack-trace": "0.0.29",
     "@types/swagger-schema-official": "2.0.20",
     "@types/yargs": "11.1.2",
