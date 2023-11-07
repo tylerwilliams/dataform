@@ -1541,10 +1541,10 @@
     "@types/express-serve-static-core" "*"
     "@types/mime" "*"
 
-"@types/stack-trace@0.0.29":
-  version "0.0.29"
-  resolved "https://registry.yarnpkg.com/@types/stack-trace/-/stack-trace-0.0.29.tgz#eb7a7c60098edb35630ed900742a5ecb20cfcb4d"
-  integrity sha512-TgfOX+mGY/NyNxJLIbDWrO9DjGoVSW9+aB8H2yy1fy32jsvxijhmyJI9fDFgvz3YP4lvJaq9DzdR/M1bOgVc9g==
+"@types/stack-trace@0.0.33":
+  version "0.0.33"
+  resolved "https://registry.yarnpkg.com/@types/stack-trace/-/stack-trace-0.0.33.tgz#979a3fde9e721e78603b781e468ef30f0df0f049"
+  integrity sha512-O7in6531Bbvlb2KEsJ0dq0CHZvc3iWSR5ZYMtvGgnHA56VgriAN/AU2LorfmcvAl2xc9N5fbCTRyMRRl8nd74g==
 
 "@types/swagger-schema-official@2.0.20":
   version "2.0.20"
