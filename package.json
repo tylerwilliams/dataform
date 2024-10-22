@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@babel/runtime": "7.4.5",
+    "@babel/runtime": "7.25.9",
     "@bazel/hide-bazel-files": "1.0.0",
     "@bazel/ibazel": "0.9.1",
     "@bazel/labs": "0.42.3",
