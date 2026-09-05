@@ -21,9 +21,9 @@ versions.check(minimum_bazel_version = "0.26.0")
 # This statement defines the @com_google_protobuf repo.
 http_archive(
     name = "com_google_protobuf",
-    sha256 = "7cd04978f70837b6b325cc20dd3f5e9d11eb19443661e05920af56124a9dea93",
-    strip_prefix = "protobuf-cc938ea39a9a4b79de981f87d60cdf00085239f3",
-    url = "https://github.com/google/protobuf/archive/cc938ea39a9a4b79de981f87d60cdf00085239f3.tar.gz",
+    sha256 = "e77b52d81aacfd2f91cdcdd0460437cca972668ae6fc99f12160c921a7a65e46",
+    strip_prefix = "protobuf-e816e3cbab18febb315ef4275c7a8edf7b7fd667",
+    url = "https://github.com/google/protobuf/archive/e816e3cbab18febb315ef4275c7a8edf7b7fd667.tar.gz",
 )
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
